@@ -19,6 +19,13 @@ export default {
             },
         },
         {
+            name: 'cameras',
+            displayName: 'menu.cameras',
+            meta: {
+                icon: 'vuestic-iconset-video',
+            },
+        },
+        {
             name: 'statistics',
             displayName: 'menu.statistics',
             meta: {

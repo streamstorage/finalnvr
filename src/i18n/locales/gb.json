@@ -294,6 +294,7 @@
         "auth": "Auth",
         "rating": "Rating",
         "buttons": "Buttons",
+        "cameras": "Cameras",
         "charts": "Charts",
         "colorPickers": "Color Pickers",
         "collapses": "Collapses",

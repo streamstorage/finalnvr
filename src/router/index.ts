@@ -23,6 +23,11 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('../pages/admin/dashboard/Dashboard.vue'),
             },
             {
+                name: 'cameras',
+                path: 'cameras',
+                component: () => import('../pages/admin/cameras/Cameras.vue'),
+            },
+            {
                 name: 'statistics',
                 path: 'statistics',
                 component: RouteViewComponent,

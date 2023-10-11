@@ -9,10 +9,10 @@ FinalNVR's backend storage is [pravega](https://github.com/pravega/pravega) whic
 Run the following command to start.
 
 ```
-$ yarn install
+$ yarn
 
 # serve with hot reload at localhost:8080 by default.
-$ yarn dev
+$ yarn dev --host
 
 # build for production
 $ yarn build
@@ -20,6 +20,11 @@ $ yarn build
 # build for production and view the bundle analyzer report.
 $ yarn build --report
 ```
+
+export HTTP_PROXY=http://172.17.0.1:19000
+export HTTPS_PROXY=http://172.17.0.1:19000
+cargo install cargo-watch
+
 
 ### License
 
