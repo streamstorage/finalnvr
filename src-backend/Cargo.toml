@@ -17,7 +17,7 @@ gst-video = { package = "gstreamer-video", git = "https://gitlab.freedesktop.org
 gstfmp4 = { package = "gst-plugin-fmp4", git = "https://gitlab.freedesktop.org/gstreamer/gst-plugins-rs.git" }
 m3u8-rs = "5.0"
 
-
+actix-web = "4"
 async-std = { version = "1", features = ["unstable", "attributes"] }
 async-native-tls = "0.4"
 async-tungstenite = { version = "0.19", features = ["async-std-runtime", "async-native-tls"] }
@@ -32,8 +32,3 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-log = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 uuid = { version = "1", features = ["v4"] }
-
-
-[[bin]]
-name = "webrtc-signalling-server"
-path = "src/bin/webrtc-signalling-server.rs"
