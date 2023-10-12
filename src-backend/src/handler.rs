@@ -347,10 +347,11 @@ impl Handler {
             gst::init().unwrap();
             let pipeline_str = format!(
                 "webrtcsink name=ws meta=\"meta,id={}\" \
-                    videotestsrc ! ws.",
+                    rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
                     //audiotestsrc ! ws.",
-                id
+                id, url
             );
+            println!("{}", pipeline_str);
             let pipeline = gst::parse_launch(&pipeline_str).expect("parse launch");
             pipeline.set_state(gst::State::Playing)?;
             let mut clients = HashMap::new();

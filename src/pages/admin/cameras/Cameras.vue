@@ -58,7 +58,7 @@
                                 :before-close="beforeClosePreview"
                                 blur hide-default-actions close-button
                             >
-                                <h3 class="va-h3">{{ `${camera.name}(${camera.url})` }}</h3>
+                                <h3 class="va-h3">{{ `${camera.name}` }}</h3>
                                 <video preload="none" class="stream" :id="camera.id" autoplay></video>
                             </va-modal>
                         </td>
