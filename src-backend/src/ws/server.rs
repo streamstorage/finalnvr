@@ -1,6 +1,6 @@
 use crate::ws::protocol as p;
 use actix::prelude::*;
-use anyhow::{anyhow, bail, Context as _, Result};
+use anyhow::{bail, Context as _, Result};
 use gst::prelude::*;
 use std::collections::{HashMap, HashSet};
 use tracing::{info, error};
@@ -95,7 +95,7 @@ impl Session {
         } else if self.consumer == id {
             Ok(&self.producer)
         } else {
-            bail!("Peer {id} is not part of {}", self.id)
+            bail!("Peer {id} is not part of session {}", self.id)
         }
     }
 }
@@ -202,7 +202,9 @@ impl Handler<Disconnect> for Server {
             if pipeline.clients.contains(&msg.connection_id) {
                 pipeline.clients.remove(&msg.connection_id);
                 if pipeline.clients.len() == 0 {
-                    pipeline.pipeline.set_state(gst::State::Null).expect("stop the pipeline");
+                    if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                        error!("Failed to stop the pipeline: {}", err);
+                    }
                     return false;
                 }
             }
@@ -222,10 +224,15 @@ impl Handler<SetPeerStatus> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: SetPeerStatus, _: &mut Context<Self>) {
-        let old_status = self
+        let old_status = match self
             .peers
-            .get_mut(&msg.connection_id)
-            .expect(format!("Peer '{}' hasn't been welcomed", msg.connection_id).as_str());
+            .get_mut(&msg.connection_id) {
+                Some(status) => status,
+                None => {
+                    error!("Peer '{}' hasn't been welcomed", msg.connection_id);
+                    return;
+                }
+            };
 
         if &msg.peer_status == &old_status.1 {
             info!("Status for '{}' hasn't changed", msg.connection_id);
@@ -288,15 +295,27 @@ impl Handler<Preview> for Server {
                 }
             }
         } else {
-            gst::init().unwrap();
+            if let Err(err) = gst::init() {
+                error!("Fail to init gst, err: {}", err);
+                return;
+            }
             let pipeline_str = format!(
                 "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::address=\"ws://127.0.0.1:{}/ws\" \
                     rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
                     //audiotestsrc ! ws.",
                 msg.camera_id, msg.connection_id, self.port, msg.camera_url
             );
-            let pipeline = gst::parse_launch(&pipeline_str).expect("parse launch");
-            pipeline.set_state(gst::State::Playing).expect("start the pipeline");
+            let pipeline = match gst::parse_launch(&pipeline_str) {
+                Ok(p) => p,
+                Err(err) => {
+                    error!("Failed to parse the pipeline: {}", err);
+                    return;
+                }
+            };
+            if let Err(err) = pipeline.set_state(gst::State::Playing) {
+                error!("Failed to play the pipeline: {}", err);
+                return;
+            }
             let mut clients = HashSet::new();
             clients.insert(msg.connection_id);
             self.pipelines.insert(msg.camera_id, Pipeline {
@@ -317,7 +336,9 @@ impl Handler<StopPreview> for Server {
             if pipeline.clients.contains(&msg.connection_id) {
                 pipeline.clients.remove(&msg.connection_id);
                 if pipeline.clients.len() == 0 {
-                    pipeline.pipeline.set_state(gst::State::Null).expect("stop the pipeline");
+                    if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                        error!("Failed to stop the pipeline: {}", err);
+                    }
                     self.pipelines.remove(&msg.camera_id);
                 }
             }
@@ -330,25 +351,28 @@ impl Handler<StartSession> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: StartSession, _: &mut Context<Self>) {
-        let producer_addr = self.peers.get(&msg.producer_id).map_or_else(
-            || Err(anyhow!("No producer with ID: '{}'", &msg.producer_id)),
-            |(addr, peer): &(Recipient<Message>, p::PeerStatus)| {
-                if !peer.producing() {
-                    Err(anyhow!(
-                        "Peer with id {} is not registered as a producer",
-                        &msg.producer_id
-                    ))
+        let producer_addr = match self.peers.get(&msg.producer_id) {
+            Some((addr, peer)) => {
+                if peer.producing() {
+                    addr
                 } else {
-                    Ok(addr)
+                    error!("Peer with id {} is not registered as a producer", &msg.producer_id);
+                    return;
                 }
-            },
-        ).expect("producer exists");
+            }
+            None => {
+                error!("No producer with ID: '{}'", &msg.producer_id);
+                return;
+            }
+        };
 
-        let consumer_addr = self.peers
-            .get(&msg.consumer_id)
-            .map_or_else(|| Err(anyhow!("No consumer with ID: '{}'", &msg.consumer_id)), 
-            |(addr, _)| Ok(addr)
-        ).expect("consumer exists");
+        let consumer_addr = match self.peers.get(&msg.consumer_id) {
+            Some((addr, _)) => addr,
+            None => {
+                error!("No consumer with ID: '{}'", &msg.consumer_id);
+                return;
+            }
+        };
 
         let session_id = uuid::Uuid::new_v4().to_string();
         self.sessions.insert(
@@ -387,7 +411,9 @@ impl Handler<EndSession> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: EndSession, _: &mut Context<Self>) {
-        self.end_session(&msg.peer_id, &msg.peer_id).expect("end session");
+        if let Err(err) = self.end_session(&msg.peer_id, &msg.peer_id) {
+            error!("Session {} failed to end: {}", msg.session_id ,err)
+        }
     }
 }
 
@@ -397,10 +423,15 @@ impl Handler<Peer> for Server {
 
     fn handle(&mut self, msg: Peer, _: &mut Context<Self>) {
         let session_id = &msg.peer_msg.session_id;
-        let session = self
+        let session = match self
             .sessions
-            .get(session_id)
-            .expect(format!("Session {} doesn't exist", session_id).as_str());
+            .get(session_id) {
+            Some(s) => s,
+            None => {
+                error!("Session {} doesn't exist", session_id);
+                return;
+            }
+        };
 
         if matches!(
             msg.peer_msg.peer_message,
@@ -414,8 +445,20 @@ impl Handler<Peer> for Server {
             return;
         }
 
-        let peer_id = session.other_peer_id(&msg.peer_id).expect("other peer id");
-        let (peer_addr, _) = self.peers.get(peer_id).expect("other peer addr");
+        let peer_id = match session.other_peer_id(&msg.peer_id) {
+            Ok(id) => id,
+            Err(err) => {
+                error!("No peer found: {}", err);
+                return;
+            }
+        };
+        let peer_addr = match self.peers.get(peer_id) {
+            Some((addr, _)) => addr,
+            None => {
+                error!("Peer with id {} dosen't exist", peer_id);
+                return;      
+            }
+        };
         peer_addr.do_send(Message(p::OutgoingMessage::Peer(msg.peer_msg)));
     }
 }
