@@ -25,7 +25,6 @@ export HTTP_PROXY=http://172.17.0.1:19000
 export HTTPS_PROXY=http://172.17.0.1:19000
 cargo install cargo-watch
 
-
 ### License
 
 [MIT](https://github.com/epicmaxco/vuestic-admin/blob/master/LICENSE) license.
