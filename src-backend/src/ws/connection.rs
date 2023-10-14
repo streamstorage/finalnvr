@@ -176,6 +176,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                                     session_id: msg.session_id,
                                 });
                             }
+                            p::IncomingMessage::NewPeer | p::IncomingMessage::List => {
+                                info!("NewPeer or List");
+                            }
                         }
                     }
                     Err(err) => {

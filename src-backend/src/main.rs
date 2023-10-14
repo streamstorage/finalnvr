@@ -3,6 +3,7 @@ use crate::ws::server::Server;
 use crate::ws::connection::Connection;
 use actix::Actor;
 use actix_web::{get, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Serialize;
 use tracing::info;
@@ -20,10 +21,9 @@ struct Args {
     port: u16,
 }
 
-fn initialize_logging(envvar_name: &str) {
-    tracing_log::LogTracer::init().expect("init tracing log");
-    let env_filter = tracing_subscriber::EnvFilter::try_from_env(envvar_name)
-        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+fn initialize_logging() -> Result<()> {
+    tracing_log::LogTracer::init()?;
+    let env_filter = tracing_subscriber::EnvFilter::from_default_env();
     let fmt_layer = tracing_subscriber::fmt::layer()
         .with_thread_ids(true)
         .with_target(true)
@@ -34,7 +34,9 @@ fn initialize_logging(envvar_name: &str) {
     let subscriber = tracing_subscriber::Registry::default()
         .with(env_filter)
         .with(fmt_layer);
-    tracing::subscriber::set_global_default(subscriber).expect("set tracing");
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    Ok(())
 }
 
 
@@ -65,9 +67,9 @@ async fn ws_route(
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<()> {
     let args = Args::parse();
-    initialize_logging("WEB_SERVER_LOG");
+    initialize_logging()?;
 
     let server = Server::new(args.port).start();
     info!("Listening on: {}:{}", args.host, args.port);
@@ -78,7 +80,9 @@ async fn main() -> std::io::Result<()> {
             .service(index)
             .route("/ws", web::get().to(ws_route))
     })
-    .bind((args.host, args.port))?
+    .bind((args.host.clone(), args.port.clone()))
+    .with_context(|| format!("Failed to bind {}:{}", args.host, args.port))?
     .run()
     .await
+    .with_context(|| "Fail to run http server")
 }

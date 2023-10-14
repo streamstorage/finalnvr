@@ -156,6 +156,8 @@ pub struct CameraMeta {
 #[serde(rename_all = "camelCase")]
 /// Messages received by the server from peers
 pub enum IncomingMessage {
+    /// Internal message to let know about new peers
+    NewPeer,
     /// Set current peer status
     SetPeerStatus(PeerStatus),
     /// Start a session with a producer peer
@@ -165,7 +167,7 @@ pub enum IncomingMessage {
     /// Send a message to a peer the sender is currently in session with
     Peer(PeerMessage),
     /// Retrieve the current list of producers
-    // List,
+    List,
     /// Spawn rtsp-> webrtc gsteamer pipeline
     Preview(CameraInfo),
     StopPreview(CameraInfo),
