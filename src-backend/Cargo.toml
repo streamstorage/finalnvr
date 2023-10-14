@@ -5,6 +5,8 @@ authors = ["Luis Liu <luis_liu@dell.com>"]
 license = "Apache License 2.0"
 description = "NVR with streamstorage for realtime analysis"
 repository = "https://github.com/streamstorage/finalnvr"
+categories = ["streaming"]
+keywords = ["nvr", "pravega"]
 edition = "2021"
 
 [dependencies]

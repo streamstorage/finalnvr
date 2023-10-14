@@ -201,7 +201,7 @@ impl Handler<Disconnect> for Server {
         self.pipelines.retain(|_, pipeline| {
             if pipeline.clients.contains(&msg.connection_id) {
                 pipeline.clients.remove(&msg.connection_id);
-                if pipeline.clients.len() == 0 {
+                if pipeline.clients.is_empty() {
                     if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
                         error!("Failed to stop the pipeline: {}", err);
                     }
@@ -234,7 +234,7 @@ impl Handler<SetPeerStatus> for Server {
                 }
             };
 
-        if &msg.peer_status == &old_status.1 {
+        if msg.peer_status == old_status.1 {
             info!("Status for '{}' hasn't changed", msg.connection_id);
             return;
         }
@@ -331,7 +331,7 @@ impl Handler<StopPreview> for Server {
         if let Some(pipeline) = self.pipelines.get_mut(&msg.camera_id) {
             if pipeline.clients.contains(&msg.connection_id) {
                 pipeline.clients.remove(&msg.connection_id);
-                if pipeline.clients.len() == 0 {
+                if pipeline.clients.is_empty() {
                     if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
                         error!("Failed to stop the pipeline: {}", err);
                     }

@@ -11,19 +11,32 @@ Run the following command to start.
 ```
 $ yarn
 
-# serve with hot reload at localhost:8080 by default.
-$ yarn dev --host
-
-# build for production
+# Build for production
 $ yarn build
 
-# build for production and view the bundle analyzer report.
+# Build for production and view the bundle analyzer report.
 $ yarn build --report
+
+$ cd src-backend && cargo build --release
 ```
 
-export HTTP_PROXY=http://172.17.0.1:19000
-export HTTPS_PROXY=http://172.17.0.1:19000
-cargo install cargo-watch
+### Development
+
+```
+# Install dev tools
+$ cargo install cargo-watch
+$ rustup component add clippy
+
+# Serve frontend with hot reload at 0.0.0.0:5173 by default.
+$ yarn dev --host
+
+# Serve backend with hot reload at 0.0.0.0:8080
+$ cd src-backend && RUST_LOG=debug cargo watch -w src -w Cargo.toml -x 'run'
+
+# Linting
+$ yarn lint
+$ cd src-backend && cargo clippy --fix
+```
 
 ### License
 

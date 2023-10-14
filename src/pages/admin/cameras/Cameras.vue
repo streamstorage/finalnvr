@@ -181,8 +181,8 @@
             //         return
             //     }
             // }
-        } else if (msg.type == "peerStatusChanged") {
-            if (msg.roles.includes("producer") && msg.meta.id === previewId && previewId !== undefined) {
+        } else if (msg.type == 'peerStatusChanged') {
+            if (msg.roles.includes('producer') && msg.meta.id === previewId && previewId !== undefined) {
                 console.log('Initiate webrtc connection')
                 webrtc = new Webrtc(wsUrl, setStatus, msg.peerId, previewId)
             }

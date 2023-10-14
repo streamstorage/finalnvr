@@ -80,7 +80,7 @@ async fn main() -> Result<()> {
             .service(index)
             .route("/ws", web::get().to(ws_route))
     })
-    .bind((args.host.clone(), args.port.clone()))
+    .bind((args.host.clone(), args.port))
     .with_context(|| format!("Failed to bind {}:{}", args.host, args.port))?
     .run()
     .await
