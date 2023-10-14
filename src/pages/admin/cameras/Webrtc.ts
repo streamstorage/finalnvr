@@ -71,12 +71,12 @@ export class Webrtc {
             this.peerConnection.close();
             this.peerConnection = undefined;
         }
-        // TODO:
-        // var videoElement = this.getVideoElement();
-        // if (videoElement) {
-        //     videoElement.pause();
-        //     videoElement.src = "";
-        // }
+        
+        var videoElement = this.getVideoElement();
+        if (videoElement) {
+            videoElement.pause();
+            videoElement.src = "";
+        }
 
         if (this.wsConn) {
             this.wsConn.close();

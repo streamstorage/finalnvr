@@ -109,6 +109,8 @@
     }
 
     let previewId: string | undefined = undefined
+    let webrtc: Webrtc | undefined
+
     function onPreview(camera: ICamera) {
         previewId = camera.id
         camera.showPreviewModal = true
@@ -127,20 +129,13 @@
             }))
         }
         webrtc?.close()
-
         webrtc = undefined
         previewId = undefined
         hide()
     }
 
-    let webrtc: Webrtc | undefined
-    function startSession(peerId: string, previewId: string) {
-        console.log("ready for connection")
-        webrtc = new Webrtc(wsUrl, setStatus, peerId, previewId)
-    }
-
-    let wsPort: string = '8443'
-    let wsUrl: string = 'ws://' + window.location.hostname + ':' + wsPort
+    let wsPort: string = '8080'
+    let wsUrl: string = `ws://${window.location.hostname}:${wsPort}/ws`
     let wsConn: WebSocket | undefined = undefined
 
     function connect() {
@@ -177,15 +172,17 @@
         } else if (msg.type == "list") {
             for (let i = 0; i < msg.producers.length; i++) {
                 if (msg.producers[i].meta.id === previewId && previewId !== undefined) {
-                    startSession(msg.producers[i].id, previewId)
+                    console.log("Initiate webrtc connection")
+                    webrtc = new Webrtc(wsUrl, setStatus, msg.producers[i].id, previewId)
+                    return
                 }
             }
-        } else if (msg.type == "peerStatusChanged") {
-            if (msg.roles.includes("producer") && msg.meta.id === previewId && previewId !== undefined) {
-                startSession(msg.peerId, previewId)
-            }
+        // } else if (msg.type == "peerStatusChanged") {
+        //     if (msg.roles.includes("producer") && msg.meta.id === previewId && previewId !== undefined) {
+        //         startSession(msg.peerId, previewId)
+        //     }
         } else {
-        //     console.error("Unsupported message: ", msg);
+             console.error("Unsupported message: ", msg);
         }
     };
 
@@ -211,7 +208,6 @@
     };
 
     function clearPeers() {
-        // TODO: close preview window
         previewId = undefined
         cameras.value.forEach(e => {
             e.showPreviewModal = false

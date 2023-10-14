@@ -35,6 +35,15 @@ pub enum OutgoingMessage {
     Error { details: String },
 }
 
+impl ToString for OutgoingMessage {
+    fn to_string(&self) -> String {
+        match serde_json::to_string(&self) {
+            Ok(str) => str,
+            Err(err) => err.to_string(),
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
 /// Register with a peer type
@@ -62,6 +71,7 @@ impl PeerStatus {
         self.roles.iter().any(|t| matches!(t, PeerRole::Producer))
     }
 
+    #[allow(dead_code)]
     pub fn listening(&self) -> bool {
         self.roles.iter().any(|t| matches!(t, PeerRole::Listener))
     }
@@ -128,9 +138,17 @@ pub struct EndSessionMessage {
 #[serde(rename_all = "camelCase")]
 /// Camera Info
 pub struct CameraInfo {
+    pub id: String,
     #[serde(default)]
     pub url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+/// Camera Meta
+pub struct CameraMeta {
     pub id: String,
+    pub init: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -138,8 +156,6 @@ pub struct CameraInfo {
 #[serde(rename_all = "camelCase")]
 /// Messages received by the server from peers
 pub enum IncomingMessage {
-    /// Internal message to let know about new peers
-    NewPeer,
     /// Set current peer status
     SetPeerStatus(PeerStatus),
     /// Start a session with a producer peer
@@ -149,7 +165,7 @@ pub enum IncomingMessage {
     /// Send a message to a peer the sender is currently in session with
     Peer(PeerMessage),
     /// Retrieve the current list of producers
-    List,
+    // List,
     /// Spawn rtsp-> webrtc gsteamer pipeline
     Preview(CameraInfo),
     StopPreview(CameraInfo),

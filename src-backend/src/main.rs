@@ -1,18 +1,12 @@
-mod handler;
-mod protocol;
-mod server;
-
-use crate::handler::Handler;
-use crate::server::Server;
-use async_std::task;
+mod ws;
+use crate::ws::server::Server;
+use crate::ws::connection::Connection;
+use actix::Actor;
+use actix_web::{get, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use clap::Parser;
+use serde::Serialize;
+use tracing::info;
 use tracing_subscriber::prelude::*;
-
-use anyhow::Error;
-use async_native_tls::TlsAcceptor;
-use async_std::fs::File as AsyncFile;
-use async_std::net::TcpListener;
-use tracing::{info, warn};
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -22,18 +16,12 @@ struct Args {
     #[clap(long, default_value = "0.0.0.0")]
     host: String,
     /// Port to listen on
-    #[clap(short, long, default_value_t = 8443)]
+    #[clap(short, long, default_value_t = 8080)]
     port: u16,
-    /// TLS certificate to use
-    #[clap(short, long)]
-    cert: Option<String>,
-    /// password to TLS certificate
-    #[clap(long)]
-    cert_password: Option<String>,
 }
 
-fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
-    tracing_log::LogTracer::init()?;
+fn initialize_logging(envvar_name: &str) {
+    tracing_log::LogTracer::init().expect("init tracing log");
     let env_filter = tracing_subscriber::EnvFilter::try_from_env(envvar_name)
         .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     let fmt_layer = tracing_subscriber::fmt::layer()
@@ -46,60 +34,51 @@ fn initialize_logging(envvar_name: &str) -> Result<(), Error> {
     let subscriber = tracing_subscriber::Registry::default()
         .with(env_filter)
         .with(fmt_layer);
-    tracing::subscriber::set_global_default(subscriber)?;
-
-    Ok(())
+    tracing::subscriber::set_global_default(subscriber).expect("set tracing");
 }
 
-fn main() -> Result<(), Error> {
-    let args = Args::parse();
-    let server = Server::spawn(|stream| Handler::new(stream));
 
-    initialize_logging("WEBRTCSINK_SIGNALLING_SERVER_LOG")?;
+#[derive(Debug, Serialize)]
+struct SimpleJson {
+    code: i32,
+    msg: String,
+}
 
-    task::block_on(async move {
-        let addr = format!("{}:{}", args.host, args.port);
-
-        // Create the event loop and TCP listener we'll accept connections on.
-        let listener = TcpListener::bind(&addr).await?;
-
-        let acceptor = match args.cert {
-            Some(cert) => {
-                let key = AsyncFile::open(cert).await?;
-                Some(TlsAcceptor::new(key, args.cert_password.as_deref().unwrap_or("")).await?)
-            }
-            None => None,
-        };
-
-        info!("Listening on: {}", addr);
-
-        while let Ok((stream, _)) = listener.accept().await {
-            let mut server_clone = server.clone();
-
-            let address = match stream.peer_addr() {
-                Ok(address) => address,
-                Err(err) => {
-                    warn!("Connected peer with no address: {}", err);
-                    continue;
-                }
-            };
-
-            info!("Accepting connection from {}", address);
-
-            if let Some(ref acceptor) = acceptor {
-                let stream = match acceptor.accept(stream).await {
-                    Ok(stream) => stream,
-                    Err(err) => {
-                        warn!("Failed to accept TLS connection from {}: {}", address, err);
-                        continue;
-                    }
-                };
-                task::spawn(async move { server_clone.accept_async(stream).await });
-            } else {
-                task::spawn(async move { server_clone.accept_async(stream).await });
-            }
-        }
-
-        Ok(())
+#[get("/api")]
+async fn index() -> HttpResponse {
+    HttpResponse::Ok().json(SimpleJson{
+        code: 200,
+        msg: "Ok".to_string()
     })
+}
+
+async fn ws_route(
+    req: HttpRequest,
+    stream: web::Payload,
+    srv: web::Data<actix::Addr<Server>>,
+) -> Result<HttpResponse, Error> {
+    actix_web_actors::ws::start(
+        Connection::new(srv.get_ref().clone()),
+        &req,
+        stream,
+    )
+}
+
+#[actix_web::main]
+async fn main() -> std::io::Result<()> {
+    let args = Args::parse();
+    initialize_logging("WEB_SERVER_LOG");
+
+    let server = Server::new(args.port).start();
+    info!("Listening on: {}:{}", args.host, args.port);
+
+    HttpServer::new(move || {
+        App::new()
+            .app_data(web::Data::new(server.clone()))
+            .service(index)
+            .route("/ws", web::get().to(ws_route))
+    })
+    .bind((args.host, args.port))?
+    .run()
+    .await
 }
