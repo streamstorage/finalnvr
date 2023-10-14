@@ -174,17 +174,18 @@
         if (msg.type == 'welcome') {
             console.info(`Got welcomed with ID ${msg.peer_id}`)
         } else if (msg.type == 'list') {
-            for (let i = 0; i < msg.producers.length; i++) {
-                if (msg.producers[i].meta.id === previewId && previewId !== undefined) {
-                    console.log('Initiate webrtc connection')
-                    webrtc = new Webrtc(wsUrl, setStatus, msg.producers[i].id, previewId)
-                    return
-                }
-            }
-            // } else if (msg.type == "peerStatusChanged") {
-            //     if (msg.roles.includes("producer") && msg.meta.id === previewId && previewId !== undefined) {
-            //         startSession(msg.peerId, previewId)
+            // for (let i = 0; i < msg.producers.length; i++) {
+            //     if (msg.producers[i].meta.id === previewId && previewId !== undefined) {
+            //         console.log('Initiate webrtc connection')
+            //         webrtc = new Webrtc(wsUrl, setStatus, msg.producers[i].id, previewId)
+            //         return
             //     }
+            // }
+        } else if (msg.type == "peerStatusChanged") {
+            if (msg.roles.includes("producer") && msg.meta.id === previewId && previewId !== undefined) {
+                console.log('Initiate webrtc connection')
+                webrtc = new Webrtc(wsUrl, setStatus, msg.peerId, previewId)
+            }
         } else {
             console.error('Unsupported message: ', msg)
         }

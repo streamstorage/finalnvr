@@ -252,13 +252,11 @@ impl Handler<SetPeerStatus> for Server {
             if let Some(meta) = &msg.peer_status.meta {
                 if let Ok(meta) = serde_json::from_value::<p::CameraMeta>(meta.clone()) {
                     if let Some((addr, _)) = self.peers.get_mut(&meta.init) {
-                        let msg = p::OutgoingMessage::List {
-                            producers: vec![p::Peer {
-                                id: msg.connection_id,
-                                meta: msg.peer_status.meta,
-                            }],
-                        };
-                        addr.do_send(Message(msg));
+                        addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                            peer_id: Some(msg.connection_id),
+                            roles: msg.peer_status.roles,
+                            meta: msg.peer_status.meta,
+                        })));
                     }
                 }
             }
@@ -276,18 +274,16 @@ impl Handler<Preview> for Server {
         if let Some(pipeline) = pipeline {
             pipeline.clients.insert(msg.connection_id.clone());
 
-            for (id, peer) in &self.peers {
-                if peer.1.producing() {
-                    if let Some(meta) = &peer.1.meta {
+            for (id, (_, peer_status)) in &self.peers {
+                if peer_status.producing() {
+                    if let Some(meta) = &peer_status.meta {
                         if meta.get("id").filter(|v| **v == serde_json::json!(msg.camera_id)).is_some() {
                             if let Some((addr, _)) = self.peers.get(&msg.connection_id) {
-                                let msg = p::OutgoingMessage::List {
-                                    producers: vec![p::Peer {
-                                        id: id.clone(),
-                                        meta: peer.1.meta.clone(),
-                                    }],
-                                };
-                                addr.do_send(Message(msg));
+                                addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                                    peer_id: Some(id.to_owned()),
+                                    roles: peer_status.roles.clone(),
+                                    meta: peer_status.meta.clone(),
+                                })));
                             }
                             return;
                         }

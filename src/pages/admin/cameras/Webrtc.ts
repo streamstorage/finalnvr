@@ -111,7 +111,7 @@ export class Webrtc {
             this.resetState()
         } else if (msg.type == 'peer') {
             // Incoming peer message signals the beginning of a call
-            if (this.peerConnection === undefined) this.createCall(msg)
+            if (this.peerConnection === undefined) this.createCall()
 
             if (msg.sdp != null) {
                 this.onIncomingSDP(msg.sdp)
