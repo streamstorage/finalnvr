@@ -101,19 +101,23 @@
     function onPreview(camera: ICamera) {
         previewId = camera.id
         camera.showPreviewModal = true
-        wsConn?.send(JSON.stringify({
-            type: 'preview',
-            id: camera.id,
-            url: camera.url,
-        }))
+        wsConn?.send(
+            JSON.stringify({
+                type: 'preview',
+                id: camera.id,
+                url: camera.url,
+            }),
+        )
     }
 
     function beforeClosePreview(hide: any) {
         if (previewId !== undefined) {
-            wsConn?.send(JSON.stringify({
-                type: 'stopPreview',
-                id: previewId,
-            }))
+            wsConn?.send(
+                JSON.stringify({
+                    type: 'stopPreview',
+                    id: previewId,
+                }),
+            )
         }
         webrtc?.close()
         webrtc = undefined
@@ -129,13 +133,17 @@
         console.log('Connecting listener')
         wsConn = new WebSocket(wsUrl)
         wsConn.addEventListener('open', () => {
-            wsConn?.send(JSON.stringify({
-                type: 'setPeerStatus',
-                roles: ['listener'],
-            }))
-            wsConn?.send(JSON.stringify({
-                type: 'listCameras',
-            }))
+            wsConn?.send(
+                JSON.stringify({
+                    type: 'setPeerStatus',
+                    roles: ['listener'],
+                }),
+            )
+            wsConn?.send(
+                JSON.stringify({
+                    type: 'listCameras',
+                }),
+            )
         })
         wsConn.addEventListener('error', onServerError)
         wsConn.addEventListener('message', onServerMessage)

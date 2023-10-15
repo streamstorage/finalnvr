@@ -125,10 +125,12 @@ export class Webrtc {
 
     connectPeer() {
         this.setStatus('Connecting ' + this.peerId)
-        this.wsConn?.send(JSON.stringify({
-            type: 'startSession',
-            peerId: this.peerId,
-        }))
+        this.wsConn?.send(
+            JSON.stringify({
+                type: 'startSession',
+                peerId: this.peerId,
+            }),
+        )
     }
 
     getVideoElement() {
@@ -166,11 +168,13 @@ export class Webrtc {
                 console.log('ICE Candidate was null, done')
                 return
             }
-            this.wsConn?.send(JSON.stringify({
-                type: 'peer',
-                sessionId: this.sessionId,
-                ice: event.candidate.toJSON(),
-            }))
+            this.wsConn?.send(
+                JSON.stringify({
+                    type: 'peer',
+                    sessionId: this.sessionId,
+                    ice: event.candidate.toJSON(),
+                }),
+            )
         }
 
         this.setStatus('Created peer connection for call, waiting for SDP')
