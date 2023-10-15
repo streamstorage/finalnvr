@@ -15,6 +15,7 @@ actix-web = "4"
 actix-web-actors = "4"
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
+diesel = { version = "2.1.3", features = ["sqlite"] }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_18"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -1,2 +1,4 @@
 target
 hls_live_stream
+.env
+*.db

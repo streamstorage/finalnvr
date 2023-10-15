@@ -1,3 +1,4 @@
+mod db;
 mod ws;
 use crate::ws::server::Server;
 use crate::ws::connection::Connection;
@@ -19,6 +20,9 @@ struct Args {
     /// Port to listen on
     #[clap(short, long, default_value_t = 8080)]
     port: u16,
+    /// db
+    #[clap(short, long, default_value = "dev.db")]
+    db: String,
 }
 
 fn initialize_logging() -> Result<()> {
@@ -71,7 +75,7 @@ async fn main() -> Result<()> {
     let args = Args::parse();
     initialize_logging()?;
 
-    let server = Server::new(args.port).start();
+    let server = Server::new(args.port, args.db).start();
     info!("Listening on: {}:{}", args.host, args.port);
 
     HttpServer::new(move || {

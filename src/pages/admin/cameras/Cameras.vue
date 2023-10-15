@@ -75,15 +75,6 @@
     const showAddCameraModal = ref(false)
     const cameras = ref([] as ICamera[])
 
-    /* https://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript */
-    function generateId() {
-        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-            var r = (Math.random() * 16) | 0,
-                v = c == 'x' ? r : (r & 0x3) | 0x8
-            return v.toString(16)
-        })
-    }
-
     function setStatus(val: string) {
         val
     }
@@ -91,16 +82,14 @@
     function addCamera(name: string, location: string, url: string) {
         let isValid: boolean = validate()
         if (isValid) {
-            showAddCameraModal.value = false
-            let camera: ICamera = {
-                id: generateId(),
-                name,
-                location,
-                url,
-                status: 'INFO',
-                showPreviewModal: false,
+            const camera = {
+                type: 'addCamera',
+                name: name.value,
+                location: location.value,
+                url: url.value,
             }
-            cameras.value.push(camera)
+            wsConn?.send(JSON.stringify(camera))
+            showAddCameraModal.value = false
         } else {
             showAddCameraModal.value = true
         }
@@ -112,23 +101,19 @@
     function onPreview(camera: ICamera) {
         previewId = camera.id
         camera.showPreviewModal = true
-        wsConn?.send(
-            JSON.stringify({
-                type: 'preview',
-                url: camera.url,
-                id: camera.id,
-            }),
-        )
+        wsConn?.send(JSON.stringify({
+            type: 'preview',
+            id: camera.id,
+            url: camera.url,
+        }))
     }
 
     function beforeClosePreview(hide: any) {
         if (previewId !== undefined) {
-            wsConn?.send(
-                JSON.stringify({
-                    type: 'stopPreview',
-                    id: previewId,
-                }),
-            )
+            wsConn?.send(JSON.stringify({
+                type: 'stopPreview',
+                id: previewId,
+            }))
         }
         webrtc?.close()
         webrtc = undefined
@@ -144,12 +129,13 @@
         console.log('Connecting listener')
         wsConn = new WebSocket(wsUrl)
         wsConn.addEventListener('open', () => {
-            wsConn?.send(
-                JSON.stringify({
-                    type: 'setPeerStatus',
-                    roles: ['listener'],
-                }),
-            )
+            wsConn?.send(JSON.stringify({
+                type: 'setPeerStatus',
+                roles: ['listener'],
+            }))
+            wsConn?.send(JSON.stringify({
+                type: 'listCameras',
+            }))
         })
         wsConn.addEventListener('error', onServerError)
         wsConn.addEventListener('message', onServerMessage)
@@ -185,6 +171,20 @@
             if (msg.roles.includes('producer') && msg.meta.id === previewId && previewId !== undefined) {
                 console.log('Initiate webrtc connection')
                 webrtc = new Webrtc(wsUrl, setStatus, msg.peerId, previewId)
+            }
+        } else if (msg.type == 'listCameras') {
+            cameras.value = []
+            for (let i = 0; i < msg.cameras.length; i++) {
+                let val = msg.cameras[i]
+                let camera: ICamera = {
+                    id: val.id,
+                    name: val.name,
+                    location: val.location,
+                    url: val.url,
+                    status: 'INFO',
+                    showPreviewModal: false,
+                }
+                cameras.value.push(camera)
             }
         } else {
             console.error('Unsupported message: ', msg)

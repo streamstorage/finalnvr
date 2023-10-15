@@ -145,19 +145,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                                     peer_status,
                                 });
                             }
-                            p::IncomingMessage::Preview(info) => {
-                                self.addr.do_send(server::Preview {
-                                    camera_id: info.id,
-                                    camera_url: info.url,
-                                    connection_id: self.id.clone(),
-                                });
-                            }
-                            p::IncomingMessage::StopPreview(info) => {
-                                self.addr.do_send(server::StopPreview {
-                                    camera_id: info.id,
-                                    connection_id: self.id.clone(),
-                                });
-                            }
                             p::IncomingMessage::StartSession(msg) => {
                                 self.addr.do_send(server::StartSession {
                                     consumer_id: self.id.clone(),
@@ -178,6 +165,42 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                             }
                             p::IncomingMessage::NewPeer | p::IncomingMessage::List => {
                                 info!("NewPeer or List");
+                            }
+                            p::IncomingMessage::Preview(camera) => {
+                                self.addr.do_send(server::Preview {
+                                    camera_id: camera.id,
+                                    camera_url: camera.url,
+                                    connection_id: self.id.clone(),
+                                });
+                            }
+                            p::IncomingMessage::StopPreview(camera) => {
+                                self.addr.do_send(server::StopPreview {
+                                    camera_id: camera.id,
+                                    connection_id: self.id.clone(),
+                                });
+                            }
+                            p::IncomingMessage::AddCamera(camera) => {
+                                self.addr.do_send(server::AddCamera {
+                                    camera,
+                                });
+                            }
+                            p::IncomingMessage::ListCameras => {
+                                self.addr
+                                    .send(server::ListCameras {})
+                                    .into_actor(self)
+                                    .then(|res, _act, ctx| {
+                                        match res {
+                                            Ok(cameras) =>{
+                                                ctx.text(p::OutgoingMessage::ListCameras {
+                                                    cameras,
+                                                }.to_string());
+                                            } ,
+                                            // something is wrong with server
+                                            _ => ctx.stop(),
+                                        }
+                                        fut::ready(())
+                                    })
+                                    .wait(ctx);
                             }
                         }
                     }

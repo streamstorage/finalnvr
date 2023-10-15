@@ -1,9 +1,11 @@
+use crate::db::models::*;
 use crate::ws::protocol as p;
 use actix::prelude::*;
 use anyhow::{bail, Context as _, Result};
+use diesel::prelude::*;
 use gst::prelude::*;
 use std::collections::{HashMap, HashSet};
-use tracing::{info, error};
+use tracing::{debug, error, info};
 
 type PeerId = String;
 
@@ -75,6 +77,20 @@ pub struct Peer {
     pub peer_msg: p::PeerMessage,
 }
 
+/// AddCamera
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct AddCamera {
+    pub camera: Camera,
+}
+
+/// List of cameras
+pub struct ListCameras;
+
+impl actix::Message for ListCameras {
+    type Result = Vec<Camera>;
+}
+
 #[derive(Clone, Debug)]
 struct Pipeline {
     pipeline: gst::Element,
@@ -103,6 +119,7 @@ impl Session {
 #[derive(Debug)]
 pub struct Server {
     port: u16,
+    db: String,
     peers: HashMap<PeerId, (Recipient<Message>, p::PeerStatus)>,
     pipelines: HashMap<String, Pipeline>,
 
@@ -112,9 +129,10 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(port: u16) -> Self {
+    pub fn new(port: u16, db: String) -> Self {
         Self {
             port,
+            db,
             peers: Default::default(),
             pipelines: Default::default(),
 
@@ -172,6 +190,57 @@ impl Server {
         })));
 
         Ok(())
+    }
+
+    fn establish_db_connection(&self) -> Result<SqliteConnection> {
+        SqliteConnection::establish(&self.db).with_context(|| format!("Cannot connect to {}", self.db))
+    }
+
+    fn add_camera(&mut self, camera: Camera) -> Result<()> {
+        use crate::db::schema::cameras;
+        use crate::db::schema::cameras::dsl::*;
+        let connection = &mut self.establish_db_connection()?;
+
+        let camera_id = uuid::Uuid::new_v4().to_string();
+        let new_camera = NewCamera { 
+            id: camera_id.as_str(),
+            name: camera.name.as_str(),
+            location: camera.location.as_str(),
+            url: &camera.url,
+        };
+
+        diesel::insert_into(cameras::table)
+            .values(&new_camera)
+            .execute(connection)
+            .map_or_else(|e| bail!("unable to add camera: {}", e), |_| Ok(()))?;
+
+        let results = cameras
+            .select(Camera::as_select())
+            .load(connection)
+            .with_context(|| "Error loading cameras")?;
+        
+        for (_, (addr, status)) in self.peers.iter() {
+            if status.listening() {
+                addr.do_send(Message(p::OutgoingMessage::ListCameras{
+                    cameras: results.clone()
+                }));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn list_cameras(&mut self) -> Result<Vec<Camera>> {
+        use crate::db::schema::cameras::dsl::*;
+        let connection = &mut self.establish_db_connection()?;
+
+        let results = cameras
+            .select(Camera::as_select())
+            .load(connection)
+            .with_context(|| "Error loading cameras")?;
+
+        debug!("Display {} cameras", results.len());
+        Ok(results)
     }
 }
 
@@ -407,9 +476,9 @@ impl Handler<EndSession> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: EndSession, _: &mut Context<Self>) {
-        if let Err(err) = self.end_session(&msg.peer_id, &msg.peer_id) {
-            error!("Session {} failed to end: {}", msg.session_id ,err)
-        }
+        self.end_session(&msg.peer_id, &msg.peer_id).unwrap_or_else(|err| {
+            error!("Session {} failed to end: {}", msg.session_id ,err);
+        })
     }
 }
 
@@ -456,5 +525,30 @@ impl Handler<Peer> for Server {
             }
         };
         peer_addr.do_send(Message(p::OutgoingMessage::Peer(msg.peer_msg)));
+    }
+}
+
+/// Handler for AddCamera message.
+impl Handler<AddCamera> for Server {
+    type Result = ();
+
+    fn handle(&mut self, msg: AddCamera, _: &mut Context<Self>) {
+        self.add_camera(msg.camera).unwrap_or_else(|err| {
+            error!("Failed to add camera: {}", err);
+        })
+    }
+}
+
+/// Handler for ListCameras message.
+impl Handler<ListCameras> for Server {
+    type Result = MessageResult<ListCameras>;
+
+    fn handle(&mut self, _: ListCameras, _: &mut Context<Self>) -> Self::Result {
+        self.list_cameras().map_or_else(|err|{
+            error!("Unable to list cameras: {}", err);
+            MessageResult(vec![])
+        }, |v|{
+            MessageResult(v)
+        })
     }
 }

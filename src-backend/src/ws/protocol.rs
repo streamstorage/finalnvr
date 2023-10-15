@@ -1,4 +1,5 @@
 /// The default protocol used by the signalling server
+use crate::db::models::Camera;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
@@ -33,6 +34,7 @@ pub enum OutgoingMessage {
     List { producers: Vec<Peer> },
     /// Notifies that an error occurred with the peer's current session
     Error { details: String },
+    ListCameras { cameras: Vec<Camera> },
 }
 
 impl ToString for OutgoingMessage {
@@ -70,8 +72,6 @@ impl PeerStatus {
     pub fn producing(&self) -> bool {
         self.roles.iter().any(|t| matches!(t, PeerRole::Producer))
     }
-
-    #[allow(dead_code)]
     pub fn listening(&self) -> bool {
         self.roles.iter().any(|t| matches!(t, PeerRole::Listener))
     }
@@ -136,15 +136,6 @@ pub struct EndSessionMessage {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-/// Camera Info
-pub struct CameraInfo {
-    pub id: String,
-    #[serde(default)]
-    pub url: String,
-}
-
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
 /// Camera Meta
 pub struct CameraMeta {
     pub id: String,
@@ -169,6 +160,8 @@ pub enum IncomingMessage {
     /// Retrieve the current list of producers
     List,
     /// Spawn rtsp-> webrtc gsteamer pipeline
-    Preview(CameraInfo),
-    StopPreview(CameraInfo),
+    Preview(Camera),
+    StopPreview(Camera),
+    AddCamera(Camera),
+    ListCameras,
 }

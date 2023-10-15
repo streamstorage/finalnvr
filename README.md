@@ -26,6 +26,12 @@ $ cd src-backend && cargo build --release
 # Install dev tools
 $ cargo install cargo-watch
 $ rustup component add clippy
+$ sudo apt-get install libsqlite3-dev
+$ cargo install diesel_cli --no-default-features --features sqlite
+
+# Generate dev db
+$ cd src-backend && diesel setup --database-url dev.db
+$ cd src-backend && diesel migration run --database-url dev.db
 
 # Serve frontend with hot reload at 0.0.0.0:5173 by default.
 $ yarn dev --host
