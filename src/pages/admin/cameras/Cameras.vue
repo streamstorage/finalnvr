@@ -39,36 +39,15 @@
                     <va-badge :text="rowData.status" :color="rowData.status" />
                 </template>
                 <template #cell(actions)="{ _, rowData }">
-                     <va-popover
-                        placement="top"
-                        message="Preview"
-                    >
-                        <va-button
-                            preset="plain"
-                            icon="preview"
-                            @click="onPreview(rowData)"
-                        />
-                    </va-popover> 
-                    <va-popover
-                        placement="top"
-                        message="Edit"
-                    >
-                        <va-button
-                            preset="plain"
-                            icon="edit"
-                            class="ml-3"
-                        />
-                    </va-popover> 
-                    <va-popover
-                        placement="top"
-                        message="Delete"
-                    >
-                        <va-button
-                            preset="plain"
-                            icon="delete"
-                            class="ml-3"
-                        />
-                    </va-popover> 
+                    <va-popover placement="top" message="Preview">
+                        <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
+                    </va-popover>
+                    <va-popover placement="top" message="Edit">
+                        <va-button preset="plain" icon="edit" class="ml-3" />
+                    </va-popover>
+                    <va-popover placement="top" message="Delete">
+                        <va-button preset="plain" icon="delete" class="ml-3" />
+                    </va-popover>
                     <va-modal
                         v-model="rowData.showPreviewModal"
                         :before-close="beforeClosePreview"
@@ -90,15 +69,15 @@
     import { Webrtc } from './Webrtc'
     import { ComputedRef, onMounted, ref } from 'vue'
     import { useForm } from 'vuestic-ui'
-    
+
     const addCameraColumns = ref([
-      { key: "id" },
-      { key: "name", sortable: true },
-      { key: "location" },
-      { key: "url" },
-      { key: "status" },
-      { key: "actions", width: 100 },
-    ]);
+        { key: 'id' },
+        { key: 'name', sortable: true },
+        { key: 'location' },
+        { key: 'url' },
+        { key: 'status' },
+        { key: 'actions', width: 100 },
+    ])
 
     const { formData, validate } = useForm('newCamera')
     const showAddCameraModal = ref(false)
