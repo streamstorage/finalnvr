@@ -10,10 +10,10 @@
                 <template #cell(id)="{ rowIndex }">
                     {{ rowIndex + 1 }}
                 </template>
-                <template #cell(status)="{ _, rowData }">
-                    <va-badge :text="rowData.status" :color="rowData.status" />
+                <template #cell(status)="{ rowData }">
+                    <va-badge :text="rowData.status" color="info" />
                 </template>
-                <template #cell(actions)="{ _, rowData }">
+                <template #cell(actions)="{ rowData }">
                     <va-popover placement="top" message="Preview">
                         <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
                     </va-popover>
@@ -183,7 +183,7 @@
                     name: val.name,
                     location: val.location,
                     url: val.url,
-                    status: 'INFO',
+                    status: 'idle',
                     showPreviewModal: oldVal ? oldVal.showPreviewModal : false,
                 }
                 array.push(camera)
