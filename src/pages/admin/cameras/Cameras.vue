@@ -31,42 +31,41 @@
 
     <va-card>
         <va-card-content class="overflow-auto">
-            <table class="va-table va-table--striped w-full">
-                <thead>
-                    <tr>
-                        <th>ID</th>
-                        <th>Name</th>
-                        <th>Location</th>
-                        <th>URL</th>
-                        <th>Status</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr v-for="(camera, index) in cameras" :key="index">
-                        <td>{{ index + 1 }}</td>
-                        <td>{{ camera.name }}</td>
-                        <td>{{ camera.location }}</td>
-                        <td>{{ camera.url }}</td>
-                        <td>
-                            <va-badge :text="camera.status" :color="camera.status" />
-                        </td>
-                        <td>
-                            <va-button preset="plain" @click="onPreview(camera)">Preview</va-button>
-                            <va-modal
-                                v-model="camera.showPreviewModal"
-                                :before-close="beforeClosePreview"
-                                blur
-                                hide-default-actions
-                                close-button
-                            >
-                                <h3 class="va-h3">{{ `${camera.name}` }}</h3>
-                                <video :id="camera.id" preload="none" class="stream" autoplay></video>
-                            </va-modal>
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+            <va-data-table :columns="addCameraColumns" :items="cameras" striped>
+                <template #cell(id)="{ rowIndex }">
+                    {{ rowIndex + 1 }}
+                </template>
+                <template #cell(status)="{ _, rowData }">
+                    <va-badge :text="rowData.status" :color="rowData.status" />
+                </template>
+                <template #cell(actions)="{ _, rowData }">
+                    <va-button
+                        preset="plain"
+                        icon="preview"
+                        @click="onPreview(rowData)"
+                    />
+                    <va-button
+                        preset="plain"
+                        icon="edit"
+                        class="ml-3"
+                    />
+                    <va-button
+                        preset="plain"
+                        icon="delete"
+                        class="ml-3"
+                    />
+                    <va-modal
+                        v-model="rowData.showPreviewModal"
+                        :before-close="beforeClosePreview"
+                        blur
+                        hide-default-actions
+                        close-button
+                    >
+                        <h3 class="va-h3">{{ `${rowData.name}` }}</h3>
+                        <video :id="rowData.id" preload="none" class="stream" autoplay></video>
+                    </va-modal>
+                </template>
+            </va-data-table>
         </va-card-content>
     </va-card>
 </template>
@@ -76,6 +75,15 @@
     import { Webrtc } from './Webrtc'
     import { ComputedRef, onMounted, ref } from 'vue'
     import { useForm } from 'vuestic-ui'
+    
+    const addCameraColumns = ref([
+      { key: "id" },
+      { key: "name", sortable: true },
+      { key: "location" },
+      { key: "url" },
+      { key: "status" },
+      { key: "actions", width: 100 },
+    ]);
 
     const { formData, validate } = useForm('newCamera')
     const showAddCameraModal = ref(false)
