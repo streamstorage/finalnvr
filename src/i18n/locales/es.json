@@ -131,6 +131,10 @@
     "menu": {
         "auth": "Autenticación",
         "buttons": "Botones",
+        "cameras": "Cámeras",
+        "contents": "Contenidos",
+        "videos": "Vídeos",
+        "images": "Imágenes",
         "charts": "Gráficos",
         "collapse": "Colapso",
         "colorPickers": "Selector de color",

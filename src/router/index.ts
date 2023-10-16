@@ -28,6 +28,29 @@ const routes: Array<RouteRecordRaw> = [
                 component: () => import('../pages/admin/cameras/Cameras.vue'),
             },
             {
+                name: 'contents',
+                path: 'contents',
+                component: RouteViewComponent,
+                children: [
+                    {
+                        name: 'videos',
+                        path: 'videos',
+                        component: () => import('../pages/admin/contents/Videos.vue'),
+                        meta: {
+                            wikiLink: 'https://github.com/epicmaxco/vuestic-admin/wiki/Charts',
+                        },
+                    },
+                    {
+                        name: 'images',
+                        path: 'images',
+                        component: () => import('../pages/admin/contents/Images.vue'),
+                        meta: {
+                            wikiLink: 'https://github.com/epicmaxco/vuestic-admin/wiki/Progress-Bars',
+                        },
+                    },
+                ],
+            },
+            {
                 name: 'statistics',
                 path: 'statistics',
                 component: RouteViewComponent,

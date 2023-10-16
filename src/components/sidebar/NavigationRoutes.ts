@@ -26,6 +26,24 @@ export default {
             },
         },
         {
+            name: 'contents',
+            displayName: 'menu.contents',
+            meta: {
+                icon: 'vuestic-iconset-files',
+            },
+            disabled: true,
+            children: [
+                {
+                    name: 'videos',
+                    displayName: 'menu.videos',
+                },
+                {
+                    name: 'images',
+                    displayName: 'menu.images',
+                },
+            ],
+        },
+        {
             name: 'statistics',
             displayName: 'menu.statistics',
             meta: {

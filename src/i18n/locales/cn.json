@@ -148,6 +148,10 @@
     "menu": {
         "auth": "授权",
         "buttons": "按钮",
+        "cameras": "摄像头",
+        "contents": "内容",
+        "videos": "视频",
+        "images": "图像",
         "charts": "图表",
         "colorPickers": "颜色选择器",
         "collapse": "折叠器",
