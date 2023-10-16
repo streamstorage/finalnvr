@@ -5,7 +5,13 @@
         v-model="showAddCameraModal"
         ok-text="Apply"
         no-dismiss
-        @ok="addCamera(formData.name as string, formData.location as string, formData.url as string)"
+        @ok="
+            addCamera(
+                (formData.name as ComputedRef).value,
+                (formData.location as ComputedRef).value,
+                (formData.url as ComputedRef).value,
+            )
+        "
     >
         <h3 class="va-h3">New Camera</h3>
         <va-form ref="newCamera" stateful class="mb-2 flex flex-col gap-2">
@@ -68,7 +74,7 @@
 <script setup lang="ts">
     import { ICamera } from './Camera'
     import { Webrtc } from './Webrtc'
-    import { onMounted, ref } from 'vue'
+    import { ComputedRef, onMounted, ref } from 'vue'
     import { useForm } from 'vuestic-ui'
 
     const { formData, validate } = useForm('newCamera')
@@ -84,9 +90,9 @@
         if (isValid) {
             const camera = {
                 type: 'addCamera',
-                name: name.value,
-                location: location.value,
-                url: url.value,
+                name: name,
+                location: location,
+                url: url,
             }
             wsConn?.send(JSON.stringify(camera))
             showAddCameraModal.value = false
