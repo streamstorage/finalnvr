@@ -184,7 +184,7 @@
                     location: val.location,
                     url: val.url,
                     status: 'INFO',
-                    showPreviewModal: oldVal? oldVal.showPreviewModal: false,
+                    showPreviewModal: oldVal ? oldVal.showPreviewModal : false,
                 }
                 array.push(camera)
             }
