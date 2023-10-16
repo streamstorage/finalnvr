@@ -163,5 +163,6 @@ pub enum IncomingMessage {
     Preview(Camera),
     StopPreview(Camera),
     AddCamera(Camera),
+    EditCamera(Camera),
     ListCameras,
 }

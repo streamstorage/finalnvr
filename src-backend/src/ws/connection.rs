@@ -184,6 +184,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                                     camera,
                                 });
                             }
+                            p::IncomingMessage::EditCamera(camera) => {
+                                self.addr.do_send(server::EditCamera {
+                                    camera,
+                                });
+                            }
                             p::IncomingMessage::ListCameras => {
                                 self.addr
                                     .send(server::ListCameras {})

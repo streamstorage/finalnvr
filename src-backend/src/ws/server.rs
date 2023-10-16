@@ -5,7 +5,7 @@ use anyhow::{bail, Context as _, Result};
 use diesel::prelude::*;
 use gst::prelude::*;
 use std::collections::{HashMap, HashSet};
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 type PeerId = String;
 
@@ -81,6 +81,13 @@ pub struct Peer {
 #[derive(Message)]
 #[rtype(result = "()")]
 pub struct AddCamera {
+    pub camera: Camera,
+}
+
+/// EditCamera
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct EditCamera {
     pub camera: Camera,
 }
 
@@ -198,7 +205,6 @@ impl Server {
 
     fn add_camera(&mut self, camera: Camera) -> Result<()> {
         use crate::db::schema::cameras;
-        use crate::db::schema::cameras::dsl::*;
         let connection = &mut self.establish_db_connection()?;
 
         let camera_id = uuid::Uuid::new_v4().to_string();
@@ -206,13 +212,53 @@ impl Server {
             id: camera_id.as_str(),
             name: camera.name.as_str(),
             location: camera.location.as_str(),
-            url: &camera.url,
+            url: camera.url.as_str(),
         };
 
         diesel::insert_into(cameras::table)
             .values(&new_camera)
             .execute(connection)
-            .map_or_else(|e| bail!("unable to add camera: {}", e), |_| Ok(()))?;
+            .with_context(|| "Error executing insert query")?;
+
+        self.list_cameras_all(connection)?;
+
+        Ok(())
+    }
+
+    fn edit_camera(&mut self, camera: Camera) -> Result<()> {
+        use crate::db::schema::cameras::dsl::*;
+
+        let connection = &mut self.establish_db_connection()?;
+
+        diesel::update(cameras.find(&camera.id))
+            .set((name.eq(&camera.name), location.eq(&camera.location), url.eq(&camera.url)))
+            .execute(connection)
+            .map(|_| ())
+            .with_context(|| "Error executing update query")?;
+        
+        self.list_cameras_all(connection)?;
+
+        if let Some(pipeline) = self.pipelines.remove(&camera.id) {
+            if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                error!("Failed to stop the pipeline: {}", err);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn list_cameras(&mut self) -> Result<Vec<Camera>> {
+        use crate::db::schema::cameras::dsl::*;
+        let connection = &mut self.establish_db_connection()?;
+
+        cameras
+            .select(Camera::as_select())
+            .load(connection)
+            .with_context(|| "Error loading cameras")
+    }
+
+    fn list_cameras_all(&mut self, connection: &mut SqliteConnection) -> Result<()> {
+        use crate::db::schema::cameras::dsl::cameras;
 
         let results = cameras
             .select(Camera::as_select())
@@ -228,19 +274,6 @@ impl Server {
         }
 
         Ok(())
-    }
-
-    fn list_cameras(&mut self) -> Result<Vec<Camera>> {
-        use crate::db::schema::cameras::dsl::*;
-        let connection = &mut self.establish_db_connection()?;
-
-        let results = cameras
-            .select(Camera::as_select())
-            .load(connection)
-            .with_context(|| "Error loading cameras")?;
-
-        debug!("Display {} cameras", results.len());
-        Ok(results)
     }
 }
 
@@ -535,6 +568,17 @@ impl Handler<AddCamera> for Server {
     fn handle(&mut self, msg: AddCamera, _: &mut Context<Self>) {
         self.add_camera(msg.camera).unwrap_or_else(|err| {
             error!("Failed to add camera: {}", err);
+        })
+    }
+}
+
+/// Handler for EditCamera message.
+impl Handler<EditCamera> for Server {
+    type Result = ();
+
+    fn handle(&mut self, msg: EditCamera, _: &mut Context<Self>) {
+        self.edit_camera(msg.camera).unwrap_or_else(|err| {
+            error!("Failed to edit camera: {}", err);
         })
     }
 }

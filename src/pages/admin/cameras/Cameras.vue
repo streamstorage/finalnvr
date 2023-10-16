@@ -1,33 +1,8 @@
 <template>
-    <va-button class="mb-8" @click="showAddCameraModal = !showAddCameraModal"> Add camera </va-button>
+    <va-button class="mb-8" @click="addCameraModal.show()"> Add camera </va-button>
 
-    <va-modal
-        v-model="showAddCameraModal"
-        ok-text="Apply"
-        no-dismiss
-        @ok="
-            addCamera(
-                (formData.name as ComputedRef).value,
-                (formData.location as ComputedRef).value,
-                (formData.url as ComputedRef).value,
-            )
-        "
-    >
-        <h3 class="va-h3">New Camera</h3>
-        <va-form ref="newCamera" stateful class="mb-2 flex flex-col gap-2">
-            <va-input
-                name="name"
-                label="Name"
-                :rules="[(value) => (value && value.length > 0) || 'Name is required']"
-            />
-            <va-input
-                name="location"
-                label="Location"
-                :rules="[(value) => (value && value.length > 0) || 'Location is required']"
-            />
-            <va-input name="url" label="URL" :rules="[(value) => (value && value.length > 0) || 'URL is required']" />
-        </va-form>
-    </va-modal>
+    <camera-modal ref="addCameraModal" title="New Camera" @ok="addCamera" />
+    <camera-modal ref="editCameraModal" title="Edit Camera" @ok="editCamera" />
 
     <va-card>
         <va-card-content class="overflow-auto">
@@ -43,7 +18,12 @@
                         <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
                     </va-popover>
                     <va-popover placement="top" message="Edit">
-                        <va-button preset="plain" icon="edit" class="ml-3" />
+                        <va-button
+                            preset="plain"
+                            icon="edit"
+                            class="ml-3"
+                            @click="editCameraModal.show(rowData.id, rowData.name, rowData.location, rowData.url)"
+                        />
                     </va-popover>
                     <va-popover placement="top" message="Delete">
                         <va-button preset="plain" icon="delete" class="ml-3" />
@@ -66,9 +46,9 @@
 
 <script setup lang="ts">
     import { ICamera } from './Camera'
+    import CameraModal from './CameraModal.vue'
     import { Webrtc } from './Webrtc'
-    import { ComputedRef, onMounted, ref } from 'vue'
-    import { useForm } from 'vuestic-ui'
+    import { onMounted, ref } from 'vue'
 
     const addCameraColumns = ref([
         { key: 'id' },
@@ -79,28 +59,33 @@
         { key: 'actions', width: 100 },
     ])
 
-    const { formData, validate } = useForm('newCamera')
-    const showAddCameraModal = ref(false)
+    const addCameraModal = ref()
+    const editCameraModal = ref()
     const cameras = ref([] as ICamera[])
 
     function setStatus(val: string) {
         val
     }
 
-    function addCamera(name: string, location: string, url: string) {
-        let isValid: boolean = validate()
-        if (isValid) {
-            const camera = {
-                type: 'addCamera',
-                name: name,
-                location: location,
-                url: url,
-            }
-            wsConn?.send(JSON.stringify(camera))
-            showAddCameraModal.value = false
-        } else {
-            showAddCameraModal.value = true
+    function addCamera(_: string, name: string, location: string, url: string) {
+        const msg = {
+            type: 'addCamera',
+            name,
+            location,
+            url,
         }
+        wsConn?.send(JSON.stringify(msg))
+    }
+
+    function editCamera(id: string, name: string, location: string, url: string) {
+        const msg = {
+            type: 'editCamera',
+            id,
+            name,
+            location,
+            url,
+        }
+        wsConn?.send(JSON.stringify(msg))
     }
 
     let previewId: string | undefined = undefined
@@ -189,19 +174,21 @@
                 webrtc = new Webrtc(wsUrl, setStatus, msg.peerId, previewId)
             }
         } else if (msg.type == 'listCameras') {
-            cameras.value = []
+            let array = []
             for (let i = 0; i < msg.cameras.length; i++) {
                 let val = msg.cameras[i]
+                const oldVal = cameras.value.find((v) => v.id === val.id)
                 let camera: ICamera = {
                     id: val.id,
                     name: val.name,
                     location: val.location,
                     url: val.url,
                     status: 'INFO',
-                    showPreviewModal: false,
+                    showPreviewModal: oldVal? oldVal.showPreviewModal: false,
                 }
-                cameras.value.push(camera)
+                array.push(camera)
             }
+            cameras.value = array
         } else {
             console.error('Unsupported message: ', msg)
         }
