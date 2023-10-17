@@ -3,6 +3,12 @@
 
     <camera-modal ref="addCameraModal" title="New Camera" @ok="addCamera" />
     <camera-modal ref="editCameraModal" title="Edit Camera" @ok="editCamera" />
+    <va-modal
+        v-model="showRemoveCameraModal"
+        title="Remove Camera"
+        message="Are you sure to remove this camera?"
+        @ok="removeCamera(removeCameraId)"
+    />
 
     <va-card>
         <va-card-content class="overflow-auto">
@@ -26,7 +32,12 @@
                         />
                     </va-popover>
                     <va-popover placement="top" message="Delete">
-                        <va-button preset="plain" icon="delete" class="ml-3" />
+                        <va-button
+                            preset="plain"
+                            icon="delete"
+                            class="ml-3"
+                            @click=";(removeCameraId = rowData.id), (showRemoveCameraModal = true)"
+                        />
                     </va-popover>
                     <va-modal
                         v-model="rowData.showPreviewModal"
@@ -61,6 +72,8 @@
 
     const addCameraModal = ref()
     const editCameraModal = ref()
+    const showRemoveCameraModal = ref(false)
+    const removeCameraId = ''
     const cameras = ref([] as ICamera[])
 
     function setStatus(val: string) {
@@ -84,6 +97,14 @@
             name,
             location,
             url,
+        }
+        wsConn?.send(JSON.stringify(msg))
+    }
+
+    function removeCamera(id: string) {
+        const msg = {
+            type: 'removeCamera',
+            id,
         }
         wsConn?.send(JSON.stringify(msg))
     }

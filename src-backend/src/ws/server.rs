@@ -91,6 +91,13 @@ pub struct EditCamera {
     pub camera: Camera,
 }
 
+/// RemoveCamera
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct RemoveCamera {
+    pub camera: Camera,
+}
+
 /// List of cameras
 pub struct ListCameras;
 
@@ -235,6 +242,27 @@ impl Server {
             .execute(connection)
             .map(|_| ())
             .with_context(|| "Error executing update query")?;
+        
+        self.list_cameras_all(connection)?;
+
+        if let Some(pipeline) = self.pipelines.remove(&camera.id) {
+            if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                error!("Failed to stop the pipeline: {}", err);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn remove_camera(&mut self, camera: Camera) -> Result<()> {
+        use crate::db::schema::cameras::dsl::*;
+
+        let connection = &mut self.establish_db_connection()?;
+
+        diesel::delete(cameras.find(&camera.id))
+            .execute(connection)
+            .map(|_| ())
+            .with_context(|| "Error executing delete query")?;
         
         self.list_cameras_all(connection)?;
 
@@ -579,6 +607,17 @@ impl Handler<EditCamera> for Server {
     fn handle(&mut self, msg: EditCamera, _: &mut Context<Self>) {
         self.edit_camera(msg.camera).unwrap_or_else(|err| {
             error!("Failed to edit camera: {}", err);
+        })
+    }
+}
+
+/// Handler for RemoveCamera message.
+impl Handler<RemoveCamera> for Server {
+    type Result = ();
+
+    fn handle(&mut self, msg: RemoveCamera, _: &mut Context<Self>) {
+        self.remove_camera(msg.camera).unwrap_or_else(|err| {
+            error!("Failed to remove camera: {}", err);
         })
     }
 }
