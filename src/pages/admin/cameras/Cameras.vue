@@ -23,6 +23,13 @@
                     <va-popover placement="top" message="Preview">
                         <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
                     </va-popover>
+                    <va-popover placement="top" message="Record">
+                        <va-button
+                            preset="plain"
+                            icon="radio_button_checked"
+                            class="ml-3"
+                        />
+                    </va-popover>
                     <va-popover placement="top" message="Edit">
                         <va-button
                             preset="plain"

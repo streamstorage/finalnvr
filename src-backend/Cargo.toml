@@ -8,6 +8,7 @@ repository = "https://github.com/streamstorage/finalnvr"
 categories = ["streaming"]
 keywords = ["nvr", "pravega"]
 edition = "2021"
+default-run = "src-backend"
 
 [dependencies]
 actix = "0.13"
@@ -23,3 +24,9 @@ tracing = { version = "0.1", features = ["log"] }
 tracing-log = "0.1"
 tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 uuid = { version = "1", features = ["v4"] }
+
+[[bin]]
+name = "add_user"
+
+[[bin]]
+name = "rtsp_camera_to_pravega"
