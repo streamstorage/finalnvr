@@ -1,7 +1,7 @@
 use crate::db::models::*;
 use crate::ws::protocol as p;
 use actix::prelude::*;
-use anyhow::{bail, Context as _, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use diesel::prelude::*;
 use gst::prelude::*;
 use std::collections::{HashMap, HashSet};
@@ -154,6 +154,196 @@ impl Server {
             consumer_sessions: Default::default(),
             producer_sessions: Default::default(),
         }
+    }
+
+    fn disconnect(&mut self, connection_id: &str) -> Result<()> {
+        self.pipelines.retain(|_, pipeline| {
+            pipeline.clients.remove(connection_id);
+            if pipeline.clients.is_empty() {
+                if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                    error!("Failed to stop the pipeline: {}", err);
+                }
+                return false;
+            }
+            true
+        });
+
+        info!(connection_id = %connection_id, "removing peer");
+        self.peers.remove(connection_id);
+
+        self.stop_producer(connection_id);
+        self.stop_consumer(connection_id);
+
+        Ok(())
+    }
+
+    fn set_peer_status(&mut self, connection_id: &str, peer_status: p::PeerStatus) -> Result<()> {
+        let old_status = self
+            .peers
+            .get_mut(connection_id)
+            .with_context(|| format!("Peer '{}' hasn't been welcomed", connection_id))?;
+
+        if peer_status == old_status.1 {
+            info!("Status for '{}' hasn't changed", connection_id);
+            return Ok(());
+        }
+
+        // if old_status.producing() && !status.producing() {
+        //     self.stop_producer(peer_id);
+        // }
+
+        let mut status = peer_status.clone();
+        status.peer_id = Some(connection_id.to_owned());
+        old_status.1 = status;
+        info!(connection_id=%connection_id, "set peer status");
+
+        if peer_status.producing() {
+            if let Some(meta) = &peer_status.meta {
+                if let Ok(meta) = serde_json::from_value::<p::CameraMeta>(meta.clone()) {
+                    if let Some((addr, _)) = self.peers.get(&meta.init) {
+                        addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                            peer_id: Some(connection_id.to_owned()),
+                            roles: peer_status.roles,
+                            meta: peer_status.meta,
+                        })));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn preview(&mut self, camera_id: &str, camera_url: &str, connection_id: &str) -> Result<()> {
+        info!(camera_id = %camera_id, url = %camera_url, listener = %connection_id, "preview");
+        let pipeline = self.pipelines.get_mut(camera_id);
+        if let Some(pipeline) = pipeline {
+            pipeline.clients.insert(connection_id.to_owned());
+
+            for (id, (_, peer_status)) in &self.peers {
+                if peer_status.producing() {
+                    if let Some(meta) = &peer_status.meta {
+                        if meta.get("id").filter(|v| **v == serde_json::json!(camera_id)).is_some() {
+                            if let Some((addr, _)) = self.peers.get(connection_id) {
+                                addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                                    peer_id: Some(id.to_owned()),
+                                    roles: peer_status.roles.clone(),
+                                    meta: peer_status.meta.clone(),
+                                })));
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            gst::init()?;
+            let pipeline_str = format!(
+                "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::address=\"ws://127.0.0.1:{}/ws\" \
+                    rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
+                    //audiotestsrc ! ws.",
+                camera_id, connection_id, self.port, camera_url
+            );
+            let pipeline = gst::parse_launch(&pipeline_str)?;
+            
+            pipeline.set_state(gst::State::Playing)?;
+
+            let mut clients = HashSet::new();
+            clients.insert(connection_id.to_owned());
+            self.pipelines.insert(camera_id.to_owned(), Pipeline {
+                pipeline,
+                clients,
+            });
+        }
+
+        Ok(())
+    }
+
+    fn stop_preview(&mut self, camera_id: &str, connection_id: &str) -> Result<()> {
+        info!(camera_id = %camera_id, connection_id = %connection_id, "stop preview");
+        if let Some(pipeline) = self.pipelines.get_mut(camera_id) {
+            pipeline.clients.remove(connection_id);
+            if pipeline.clients.is_empty() {
+                if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
+                    error!("Failed to stop the pipeline: {}", err);
+                }
+                self.pipelines.remove(camera_id);
+            }    
+        }
+
+        Ok(())
+    }
+
+    fn start_session(&mut self, producer_id: &str, consumer_id: &str) -> Result<()> {
+        let producer_addr = self.peers.get(producer_id).map_or_else(
+            || bail!("No producer with ID: '{}'", producer_id),
+            |(addr, peer)| {
+                match peer.producing() {
+                    true => Ok(addr),
+                    false => bail!("Peer with id {} is not registered as a producer", producer_id)
+                }
+            }
+        )?;
+        
+        let (consumer_addr, _) = &self.peers.get(consumer_id).ok_or_else(
+           || anyhow!("No consumer with ID: '{}'", consumer_id)
+        )?;
+
+        let session_id = uuid::Uuid::new_v4().to_string();
+        self.sessions.insert(
+            session_id.clone(),
+            Session {
+                id: session_id.clone(),
+                consumer: consumer_id.to_owned(),
+                producer: producer_id.to_owned(),
+            },
+        );
+        self.consumer_sessions
+            .entry(consumer_id.to_owned())
+            .or_insert_with(HashSet::new)
+            .insert(session_id.clone());
+        self.producer_sessions
+            .entry(producer_id.to_owned())
+            .or_insert_with(HashSet::new)
+            .insert(session_id.clone());
+        
+        consumer_addr.do_send(Message(p::OutgoingMessage::SessionStarted {
+            peer_id: producer_id.to_owned(),
+            session_id: session_id.clone(),
+        }));
+
+        producer_addr.do_send(Message(p::OutgoingMessage::StartSession {
+            peer_id: consumer_id.to_owned(),
+            session_id: session_id.clone(),
+        }));
+
+        info!(id = %session_id, producer_id = %producer_id, consumer_id = %consumer_id, "started a session");
+
+        Ok(())
+    }
+
+    fn peer(&mut self, peer_id: &str, peer_msg: p::PeerMessage) -> Result<()> {
+        let session_id = &peer_msg.session_id;
+        let session = self
+            .sessions
+            .get(session_id).ok_or_else(||anyhow!("Session {} doesn't exist", session_id))?;
+
+        if matches!(
+            &peer_msg.peer_message,
+            p::PeerMessageInner::Sdp(p::SdpMessage::Offer { .. })
+        ) && peer_id == session.consumer {
+            bail!(
+                r#"cannot forward offer from "{}" to "{}" as "{}" is not the producer"#,
+                peer_id, session.producer, peer_id
+            );
+        }
+
+        let peer_id = session.other_peer_id(peer_id)?;
+        let (peer_addr, _) = self.peers.get(peer_id).ok_or_else( 
+            || anyhow!("Peer with id {} dosen't exist", peer_id))?;
+        peer_addr.do_send(Message(p::OutgoingMessage::Peer(peer_msg)));
+
+        Ok(())
     }
 
     fn stop_producer(&mut self, peer_id: &str) {
@@ -328,24 +518,9 @@ impl Handler<Disconnect> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: Disconnect, _: &mut Context<Self>) {
-        self.pipelines.retain(|_, pipeline| {
-            if pipeline.clients.contains(&msg.connection_id) {
-                pipeline.clients.remove(&msg.connection_id);
-                if pipeline.clients.is_empty() {
-                    if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
-                        error!("Failed to stop the pipeline: {}", err);
-                    }
-                    return false;
-                }
-            }
-            true
-        });
-
-        info!(connection_id = %msg.connection_id, "removing peer");
-        self.peers.remove(&msg.connection_id);
-
-        self.stop_producer(&msg.connection_id);
-        self.stop_consumer(&msg.connection_id);
+        self.disconnect(&msg.connection_id).unwrap_or_else(|err| {
+            error!("Failed to excute disconnect handler: {}", err);
+        })
     }
 }
 
@@ -354,43 +529,9 @@ impl Handler<SetPeerStatus> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: SetPeerStatus, _: &mut Context<Self>) {
-        let old_status = match self
-            .peers
-            .get_mut(&msg.connection_id) {
-                Some(status) => status,
-                None => {
-                    error!("Peer '{}' hasn't been welcomed", msg.connection_id);
-                    return;
-                }
-            };
-
-        if msg.peer_status == old_status.1 {
-            info!("Status for '{}' hasn't changed", msg.connection_id);
-            return;
-        }
-
-        // if old_status.producing() && !status.producing() {
-        //     self.stop_producer(peer_id);
-        // }
-
-        let mut status = msg.peer_status.clone();
-        status.peer_id = Some(msg.connection_id.clone());
-        old_status.1 = status;
-        info!(connection_id=%msg.connection_id, "set peer status");
-
-        if msg.peer_status.producing() {
-            if let Some(meta) = &msg.peer_status.meta {
-                if let Ok(meta) = serde_json::from_value::<p::CameraMeta>(meta.clone()) {
-                    if let Some((addr, _)) = self.peers.get_mut(&meta.init) {
-                        addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
-                            peer_id: Some(msg.connection_id),
-                            roles: msg.peer_status.roles,
-                            meta: msg.peer_status.meta,
-                        })));
-                    }
-                }
-            }
-        }
+        self.set_peer_status(&msg.connection_id, msg.peer_status).unwrap_or_else(|err| {
+            error!("Failed to set peer status: {}", err);
+        })
     }
 }
 
@@ -399,56 +540,9 @@ impl Handler<Preview> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: Preview, _: &mut Context<Self>) {
-        info!(camera_id = %msg.camera_id, url = %msg.camera_url, viewer = %msg.connection_id, "preview");
-        let pipeline = self.pipelines.get_mut(&msg.camera_id);
-        if let Some(pipeline) = pipeline {
-            pipeline.clients.insert(msg.connection_id.clone());
-
-            for (id, (_, peer_status)) in &self.peers {
-                if peer_status.producing() {
-                    if let Some(meta) = &peer_status.meta {
-                        if meta.get("id").filter(|v| **v == serde_json::json!(msg.camera_id)).is_some() {
-                            if let Some((addr, _)) = self.peers.get(&msg.connection_id) {
-                                addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
-                                    peer_id: Some(id.to_owned()),
-                                    roles: peer_status.roles.clone(),
-                                    meta: peer_status.meta.clone(),
-                                })));
-                            }
-                            return;
-                        }
-                    }
-                }
-            }
-        } else {
-            if let Err(err) = gst::init() {
-                error!("Fail to init gst, err: {}", err);
-                return;
-            }
-            let pipeline_str = format!(
-                "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::address=\"ws://127.0.0.1:{}/ws\" \
-                    rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
-                    //audiotestsrc ! ws.",
-                msg.camera_id, msg.connection_id, self.port, msg.camera_url
-            );
-            let pipeline = match gst::parse_launch(&pipeline_str) {
-                Ok(p) => p,
-                Err(err) => {
-                    error!("Failed to parse the pipeline: {}", err);
-                    return;
-                }
-            };
-            if let Err(err) = pipeline.set_state(gst::State::Playing) {
-                error!("Failed to play the pipeline: {}", err);
-                return;
-            }
-            let mut clients = HashSet::new();
-            clients.insert(msg.connection_id);
-            self.pipelines.insert(msg.camera_id, Pipeline {
-                pipeline,
-                clients,
-            });
-        }
+        self.preview(&msg.camera_id, &msg.camera_url, &msg.connection_id).unwrap_or_else(|err| {
+            error!("Failed to preview: {}", err);
+        })
     }
 }
 
@@ -457,18 +551,9 @@ impl Handler<StopPreview> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: StopPreview, _: &mut Context<Self>) {
-        info!(camera_id = %msg.camera_id, connection_id = %msg.connection_id, "stop preview");
-        if let Some(pipeline) = self.pipelines.get_mut(&msg.camera_id) {
-            if pipeline.clients.contains(&msg.connection_id) {
-                pipeline.clients.remove(&msg.connection_id);
-                if pipeline.clients.is_empty() {
-                    if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
-                        error!("Failed to stop the pipeline: {}", err);
-                    }
-                    self.pipelines.remove(&msg.camera_id);
-                }
-            }
-        }
+        self.stop_preview(&msg.camera_id, &msg.connection_id).unwrap_or_else(|err| {
+            error!("Failed to preview: {}", err);
+        })
     }
 }
 
@@ -477,58 +562,9 @@ impl Handler<StartSession> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: StartSession, _: &mut Context<Self>) {
-        let producer_addr = match self.peers.get(&msg.producer_id) {
-            Some((addr, peer)) => {
-                if peer.producing() {
-                    addr
-                } else {
-                    error!("Peer with id {} is not registered as a producer", &msg.producer_id);
-                    return;
-                }
-            }
-            None => {
-                error!("No producer with ID: '{}'", &msg.producer_id);
-                return;
-            }
-        };
-
-        let consumer_addr = match self.peers.get(&msg.consumer_id) {
-            Some((addr, _)) => addr,
-            None => {
-                error!("No consumer with ID: '{}'", &msg.consumer_id);
-                return;
-            }
-        };
-
-        let session_id = uuid::Uuid::new_v4().to_string();
-        self.sessions.insert(
-            session_id.clone(),
-            Session {
-                id: session_id.clone(),
-                consumer: msg.consumer_id.clone(),
-                producer: msg.producer_id.clone(),
-            },
-        );
-        self.consumer_sessions
-            .entry(msg.consumer_id.clone())
-            .or_insert_with(HashSet::new)
-            .insert(session_id.clone());
-        self.producer_sessions
-            .entry(msg.producer_id.clone())
-            .or_insert_with(HashSet::new)
-            .insert(session_id.clone());
-        
-        consumer_addr.do_send(Message(p::OutgoingMessage::SessionStarted {
-            peer_id: msg.producer_id.clone(),
-            session_id: session_id.clone(),
-        }));
-
-        producer_addr.do_send(Message(p::OutgoingMessage::StartSession {
-            peer_id: msg.consumer_id.clone(),
-            session_id: session_id.clone(),
-        }));
-
-        info!(id = %session_id, producer_id = %msg.producer_id, consumer_id = %msg.consumer_id, "started a session");
+        self.start_session(&msg.producer_id, &msg.consumer_id).unwrap_or_else(|err| {
+            error!("Failed to start session: {}", err);
+        })
     }
 }
 
@@ -548,44 +584,9 @@ impl Handler<Peer> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: Peer, _: &mut Context<Self>) {
-        let session_id = &msg.peer_msg.session_id;
-        let session = match self
-            .sessions
-            .get(session_id) {
-            Some(s) => s,
-            None => {
-                error!("Session {} doesn't exist", session_id);
-                return;
-            }
-        };
-
-        if matches!(
-            msg.peer_msg.peer_message,
-            p::PeerMessageInner::Sdp(p::SdpMessage::Offer { .. })
-        ) && msg.peer_id == session.consumer
-        {
-            error!(
-                r#"cannot forward offer from "{}" to "{}" as "{}" is not the producer"#,
-                msg.peer_id, session.producer, msg.peer_id
-            );
-            return;
-        }
-
-        let peer_id = match session.other_peer_id(&msg.peer_id) {
-            Ok(id) => id,
-            Err(err) => {
-                error!("No peer found: {}", err);
-                return;
-            }
-        };
-        let peer_addr = match self.peers.get(peer_id) {
-            Some((addr, _)) => addr,
-            None => {
-                error!("Peer with id {} dosen't exist", peer_id);
-                return;      
-            }
-        };
-        peer_addr.do_send(Message(p::OutgoingMessage::Peer(msg.peer_msg)));
+        self.peer(&msg.peer_id, msg.peer_msg).unwrap_or_else(|err| {
+            error!("Fail to peer: {}",err);
+        })
     }
 }
 
