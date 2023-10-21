@@ -17,16 +17,16 @@
                     {{ rowIndex + 1 }}
                 </template>
                 <template #cell(status)="{ rowData }">
-                    <va-badge :text="rowData.status" color="info" />
+                    <va-badge :text="rowData.recording?'recording': 'idle'" color="info" />
                 </template>
                 <template #cell(actions)="{ rowData }">
                     <va-popover placement="top" message="Preview">
                         <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
                     </va-popover>
-                    <va-popover placement="top" message="Record">
+                    <va-popover placement="top" :message="rowData.recording?'Stop Recording':'Record'">
                         <va-button
                             preset="plain"
-                            icon="radio_button_checked"
+                            :icon="rowData.recording?'radio_button_checked':'play_circle_outline'"
                             class="ml-3"
                         />
                     </va-popover>
@@ -200,6 +200,11 @@
             if (msg.roles.includes('producer') && msg.meta.id === previewId && previewId !== undefined) {
                 console.log('Initiate webrtc connection')
                 webrtc = new Webrtc(wsUrl, setStatus, msg.peerId, previewId)
+            } else if (msg.roles.includes('recorder')) {
+                let camera = cameras.value.find((e) => e.id === msg.meta.id)
+                if (camera) {
+                    camera.recording = msg.peerId? true: false
+                }
             }
         } else if (msg.type == 'listCameras') {
             let array = []
@@ -211,7 +216,7 @@
                     name: val.name,
                     location: val.location,
                     url: val.url,
-                    status: 'idle',
+                    recording: false,
                     showPreviewModal: oldVal ? oldVal.showPreviewModal : false,
                 }
                 array.push(camera)

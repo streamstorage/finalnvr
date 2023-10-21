@@ -3,6 +3,6 @@ export interface ICamera {
     name: string
     location: string
     url: string
-    status: string
+    recording: boolean
     showPreviewModal: boolean
 }

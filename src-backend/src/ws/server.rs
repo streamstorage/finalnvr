@@ -99,10 +99,10 @@ pub struct RemoveCamera {
 }
 
 /// List of cameras
-pub struct ListCameras;
-
-impl actix::Message for ListCameras {
-    type Result = Vec<Camera>;
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct ListCameras {
+    pub addr: Recipient<Message>,
 }
 
 #[derive(Clone, Debug)]
@@ -138,8 +138,10 @@ pub struct Server {
     pipelines: HashMap<String, Pipeline>,
 
     sessions: HashMap<String, Session>,
-    consumer_sessions: HashMap<String, HashSet<String>>,
-    producer_sessions: HashMap<String, HashSet<String>>,
+    consumer_sessions: HashMap<PeerId, HashSet<PeerId>>,
+    producer_sessions: HashMap<PeerId, HashSet<PeerId>>,
+
+    recordings: HashMap<String, PeerId>,
 }
 
 impl Server {
@@ -153,6 +155,8 @@ impl Server {
             sessions: Default::default(),
             consumer_sessions: Default::default(),
             producer_sessions: Default::default(),
+
+            recordings: Default::default(),
         }
     }
 
@@ -167,9 +171,30 @@ impl Server {
             }
             true
         });
+        self.recordings.retain(|_, peer_id| {
+            if peer_id == connection_id {
+                false
+            } else {
+                true
+            }
+        });
 
         info!(connection_id = %connection_id, "removing peer");
-        self.peers.remove(connection_id);
+        let peer = self.peers.remove(connection_id);
+        
+        if let Some((_, peer_status)) = peer {
+            if peer_status.recording() {
+                self.peers.iter().for_each(|(_, (addr, status))| {
+                    if status.listening() {
+                        addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                            peer_id: None,
+                            roles: peer_status.roles.clone(),
+                            meta: peer_status.meta.clone(),
+                        })));
+                    }
+                })
+            }
+        }
 
         self.stop_producer(connection_id);
         self.stop_consumer(connection_id);
@@ -207,6 +232,21 @@ impl Server {
                             meta: peer_status.meta,
                         })));
                     }
+                }
+            }
+        } else if peer_status.recording() {
+            if let Some(meta) = peer_status.meta.clone() {
+                if let Some(id) = meta.get("id").and_then(|value| value.as_str()) {
+                    self.recordings.insert(id.to_owned(), connection_id.to_string());
+                    self.peers.iter().for_each(|(_, (addr, status))| {
+                        if status.listening() {
+                            addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                                peer_id: Some(connection_id.to_owned()),
+                                roles: peer_status.roles.clone(),
+                                meta: peer_status.meta.clone(),
+                            })));
+                        }
+                    })
                 }
             }
         }
@@ -465,14 +505,32 @@ impl Server {
         Ok(())
     }
 
-    fn list_cameras(&mut self) -> Result<Vec<Camera>> {
+    fn list_cameras(&mut self, addr: Recipient<Message>) -> Result<()> {
         use crate::db::schema::cameras::dsl::*;
         let connection = &mut self.establish_db_connection()?;
 
-        cameras
+        let cams = cameras
             .select(Camera::as_select())
             .load(connection)
-            .with_context(|| "Error loading cameras")
+            .with_context(|| "Error loading cameras")?;
+
+        addr.do_send(Message(p::OutgoingMessage::ListCameras{
+            cameras: cams.clone()
+        }));
+
+        cams.iter().for_each(|camera| {
+            if let Some(peer_id) = self.recordings.get(&camera.id) {
+                if let Some((_, peer_status)) = self.peers.get(peer_id) {
+                    addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
+                        peer_id: Some(peer_id.to_owned()),
+                        roles: peer_status.roles.clone(),
+                        meta: peer_status.meta.clone(),
+                    })));
+                }
+            }
+        });
+
+        Ok(())
     }
 
     fn list_cameras_all(&mut self, connection: &mut SqliteConnection) -> Result<()> {
@@ -625,14 +683,11 @@ impl Handler<RemoveCamera> for Server {
 
 /// Handler for ListCameras message.
 impl Handler<ListCameras> for Server {
-    type Result = MessageResult<ListCameras>;
+    type Result = ();
 
-    fn handle(&mut self, _: ListCameras, _: &mut Context<Self>) -> Self::Result {
-        self.list_cameras().map_or_else(|err|{
+    fn handle(&mut self, msg: ListCameras, _: &mut Context<Self>) {
+        self.list_cameras(msg.addr).unwrap_or_else(|err|{
             error!("Unable to list cameras: {}", err);
-            MessageResult(vec![])
-        }, |v|{
-            MessageResult(v)
         })
     }
 }

@@ -56,6 +56,9 @@ pub enum PeerRole {
     /// Register as a listener
     #[serde(rename_all = "camelCase")]
     Listener,
+    /// Register as a recorder
+    #[serde(rename_all = "camelCase")]
+    Recorder,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Default, Clone)]
@@ -74,6 +77,9 @@ impl PeerStatus {
     }
     pub fn listening(&self) -> bool {
         self.roles.iter().any(|t| matches!(t, PeerRole::Listener))
+    }
+    pub fn recording(&self) -> bool {
+        self.roles.iter().any(|t| matches!(t, PeerRole::Recorder))
     }
 }
 

@@ -195,22 +195,9 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                                 });
                             }
                             p::IncomingMessage::ListCameras => {
-                                self.addr
-                                    .send(server::ListCameras {})
-                                    .into_actor(self)
-                                    .then(|res, _act, ctx| {
-                                        match res {
-                                            Ok(cameras) =>{
-                                                ctx.text(p::OutgoingMessage::ListCameras {
-                                                    cameras,
-                                                }.to_string());
-                                            } ,
-                                            // something is wrong with server
-                                            _ => ctx.stop(),
-                                        }
-                                        fut::ready(())
-                                    })
-                                    .wait(ctx);
+                                self.addr.do_send(server::ListCameras {
+                                    addr: ctx.address().recipient()
+                                });
                             }
                         }
                     }
