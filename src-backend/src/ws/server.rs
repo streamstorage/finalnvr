@@ -570,6 +570,7 @@ impl Server {
     fn start_recorder(&mut self, camera_id: &String) -> Result<()> {
         let mut cmd = Command::new("./target/debug/rtsp_camera_to_pravega");
         let command = cmd.arg("--port").arg(self.port.to_string()).arg("--id").arg(camera_id);
+        // TODO: spawn detached process
         command.spawn().with_context(||"rtsp_camera_to_pravega failed to start")?;
         Ok(())
     }
