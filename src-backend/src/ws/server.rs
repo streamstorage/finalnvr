@@ -187,11 +187,7 @@ impl Server {
             true
         });
         self.recorders.retain(|_, peer_id| {
-            if peer_id == connection_id {
-                false
-            } else {
-                true
-            }
+            peer_id != connection_id
         });
 
         info!(connection_id = %connection_id, "removing peer");

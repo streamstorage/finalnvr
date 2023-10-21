@@ -11,9 +11,9 @@
     />
     <va-modal
         v-model="showRecorderModal"
-        :title="ToStopRecorder?'Stop Recorder':'Start Recorder'"
-        :message="ToStopRecorder?'Are you sure to stop this recorder?':'Are you sure to record this camera?'"
-        @ok="ToStopRecorder?stopRecorder(recorderCameraId):startRecorder(recorderCameraId)"
+        :title="ToStopRecorder ? 'Stop Recorder' : 'Start Recorder'"
+        :message="ToStopRecorder ? 'Are you sure to stop this recorder?' : 'Are you sure to record this camera?'"
+        @ok="ToStopRecorder ? stopRecorder(recorderCameraId) : startRecorder(recorderCameraId)"
     />
 
     <va-card>
@@ -23,16 +23,16 @@
                     {{ rowIndex + 1 }}
                 </template>
                 <template #cell(status)="{ rowData }">
-                    <va-badge :text="rowData.recording?'recording': 'idle'" color="info" />
+                    <va-badge :text="rowData.recording ? 'recording' : 'idle'" color="info" />
                 </template>
                 <template #cell(actions)="{ rowData }">
                     <va-popover placement="top" message="Preview">
                         <va-button preset="plain" icon="preview" @click="onPreview(rowData)" />
                     </va-popover>
-                    <va-popover placement="top" :message="rowData.recording?'Stop Recording':'Record'">
+                    <va-popover placement="top" :message="rowData.recording ? 'Stop Recording' : 'Record'">
                         <va-button
                             preset="plain"
-                            :icon="rowData.recording?'radio_button_checked':'play_circle_outline'"
+                            :icon="rowData.recording ? 'radio_button_checked' : 'play_circle_outline'"
                             class="ml-3"
                             @click="clickRecorder(rowData.id, rowData.recording)"
                         />
@@ -91,7 +91,7 @@
     const ToStopRecorder = ref(false)
     let removeCameraId = ''
     let recorderCameraId = ''
-    
+
     const cameras = ref([] as ICamera[])
 
     function setStatus(val: string) {
@@ -235,7 +235,7 @@
             } else if (msg.roles.includes('recorder')) {
                 let camera = cameras.value.find((e) => e.id === msg.meta.id)
                 if (camera) {
-                    camera.recording = msg.peerId? true: false
+                    camera.recording = msg.peerId ? true : false
                 }
             }
         } else if (msg.type == 'listCameras') {
