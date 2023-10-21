@@ -486,6 +486,7 @@ impl Server {
         
         self.list_cameras_all(connection)?;
 
+        // Close the existing preview pipeline in case of caching camera url
         if let Some(pipeline) = self.pipelines.remove(&camera.id) {
             if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
                 error!("Failed to stop the pipeline: {}", err);
@@ -510,6 +511,16 @@ impl Server {
         if let Some(pipeline) = self.pipelines.remove(camera_id) {
             if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
                 error!("Failed to stop the pipeline: {}", err);
+            }
+        }
+
+        if let Some((addr, peer_status)) = self.recorders.get(camera_id).and_then(|peer_id| self.peers.get(peer_id)) {
+            if peer_status.recording() {
+                addr.do_send(Message(p::OutgoingMessage::EndSession(p::EndSessionMessage {
+                    session_id: camera_id.to_owned(),
+                })));
+            } else {
+                bail!("Peer with id {:?} is not registered as a recorder", peer_status.peer_id);
             }
         }
 
