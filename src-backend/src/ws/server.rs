@@ -105,6 +105,13 @@ pub struct ListCameras {
     pub addr: Recipient<Message>,
 }
 
+/// StopRecorder
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct StopRecorder {
+    pub camera: Camera,
+}
+
 #[derive(Clone, Debug)]
 struct Pipeline {
     pipeline: gst::Element,
@@ -141,7 +148,7 @@ pub struct Server {
     consumer_sessions: HashMap<PeerId, HashSet<PeerId>>,
     producer_sessions: HashMap<PeerId, HashSet<PeerId>>,
 
-    recordings: HashMap<String, PeerId>,
+    recorders: HashMap<String, PeerId>,
 }
 
 impl Server {
@@ -156,7 +163,7 @@ impl Server {
             consumer_sessions: Default::default(),
             producer_sessions: Default::default(),
 
-            recordings: Default::default(),
+            recorders: Default::default(),
         }
     }
 
@@ -171,7 +178,7 @@ impl Server {
             }
             true
         });
-        self.recordings.retain(|_, peer_id| {
+        self.recorders.retain(|_, peer_id| {
             if peer_id == connection_id {
                 false
             } else {
@@ -237,7 +244,7 @@ impl Server {
         } else if peer_status.recording() {
             if let Some(meta) = peer_status.meta.clone() {
                 if let Some(id) = meta.get("id").and_then(|value| value.as_str()) {
-                    self.recordings.insert(id.to_owned(), connection_id.to_string());
+                    self.recorders.insert(id.to_owned(), connection_id.to_string());
                     self.peers.iter().for_each(|(_, (addr, status))| {
                         if status.listening() {
                             addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
@@ -484,19 +491,19 @@ impl Server {
         Ok(())
     }
 
-    fn remove_camera(&mut self, camera: Camera) -> Result<()> {
+    fn remove_camera(&mut self, camera_id: &String) -> Result<()> {
         use crate::db::schema::cameras::dsl::*;
 
         let connection = &mut self.establish_db_connection()?;
 
-        diesel::delete(cameras.find(&camera.id))
+        diesel::delete(cameras.find(camera_id))
             .execute(connection)
             .map(|_| ())
             .with_context(|| "Error executing delete query")?;
         
         self.list_cameras_all(connection)?;
 
-        if let Some(pipeline) = self.pipelines.remove(&camera.id) {
+        if let Some(pipeline) = self.pipelines.remove(camera_id) {
             if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
                 error!("Failed to stop the pipeline: {}", err);
             }
@@ -519,7 +526,7 @@ impl Server {
         }));
 
         cams.iter().for_each(|camera| {
-            if let Some(peer_id) = self.recordings.get(&camera.id) {
+            if let Some(peer_id) = self.recorders.get(&camera.id) {
                 if let Some((_, peer_status)) = self.peers.get(peer_id) {
                     addr.do_send(Message(p::OutgoingMessage::PeerStatusChanged(p::PeerStatus {
                         peer_id: Some(peer_id.to_owned()),
@@ -543,12 +550,25 @@ impl Server {
         
         for (_, (addr, status)) in self.peers.iter() {
             if status.listening() {
-                addr.do_send(Message(p::OutgoingMessage::ListCameras{
+                addr.do_send(Message(p::OutgoingMessage::ListCameras {
                     cameras: results.clone()
                 }));
             }
         }
 
+        Ok(())
+    }
+
+    fn stop_recorder(&mut self, camera_id: &String) -> Result<()> {
+        if let Some((addr, peer_status)) = self.recorders.get(camera_id).and_then(|peer_id| self.peers.get(peer_id)) {
+            if peer_status.recording() {
+                addr.do_send(Message(p::OutgoingMessage::EndSession(p::EndSessionMessage {
+                    session_id: camera_id.to_owned(),
+                })));
+            } else {
+                bail!("Peer with id {:?} is not registered as a recorder", peer_status.peer_id);
+            }
+        }
         Ok(())
     }
 }
@@ -675,7 +695,7 @@ impl Handler<RemoveCamera> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: RemoveCamera, _: &mut Context<Self>) {
-        self.remove_camera(msg.camera).unwrap_or_else(|err| {
+        self.remove_camera(&msg.camera.id).unwrap_or_else(|err| {
             error!("Failed to remove camera: {}", err);
         })
     }
@@ -688,6 +708,18 @@ impl Handler<ListCameras> for Server {
     fn handle(&mut self, msg: ListCameras, _: &mut Context<Self>) {
         self.list_cameras(msg.addr).unwrap_or_else(|err|{
             error!("Unable to list cameras: {}", err);
+        })
+    }
+}
+
+
+/// Handler for StopRecorder message.
+impl Handler<StopRecorder> for Server {
+    type Result = ();
+
+    fn handle(&mut self, msg: StopRecorder, _: &mut Context<Self>) {
+        self.stop_recorder(&msg.camera.id).unwrap_or_else(|err| {
+            error!("Failed to stop recorder: {}", err);
         })
     }
 }

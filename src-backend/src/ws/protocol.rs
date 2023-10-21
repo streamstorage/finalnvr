@@ -172,4 +172,5 @@ pub enum IncomingMessage {
     EditCamera(Camera),
     RemoveCamera(Camera),
     ListCameras,
+    StopRecorder(Camera),
 }

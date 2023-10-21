@@ -16,8 +16,9 @@ async fn main() -> Result<()> {
 
     // start gstreamer pipeline
     // if the pipeline fails, terminate the application
-    let meta = Some(serde_json::json!({ "id": "9989dfdc-5aa4-4a23-864a-37d0d259aff3" }));
-    while let Err(err) = connect(&handle, &meta).await {
+    let id = "9989dfdc-5aa4-4a23-864a-37d0d259aff3";
+
+    while let Err(err) = connect(&handle, id).await {
         error!("Connect failed due to: {}", err);
         sleep(Duration::from_secs(1)).await;
     }
@@ -25,7 +26,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn connect(handle: &Handle, meta: &Option<serde_json::Value>) -> Result<()> {
+async fn connect(handle: &Handle, id: &str) -> Result<()> {
     let arg = src_backend::get_args();
     let uri = format!("ws://{}:{}/ws", arg.host, arg.port);
 
@@ -53,7 +54,8 @@ async fn connect(handle: &Handle, meta: &Option<serde_json::Value>) -> Result<()
         });
 
     let mut websocket_sender_clone = websocket_sender.clone();
-    let meta_clone = meta.to_owned();
+
+    let camera_id = id.to_owned();
     let receive_task_handle = handle.spawn(async move {
             while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
                 debug!("Received message {:?}", msg);
@@ -65,10 +67,19 @@ async fn connect(handle: &Handle, meta: &Option<serde_json::Value>) -> Result<()
                                     websocket_sender_clone.send(p::IncomingMessage::SetPeerStatus(
                                          p::PeerStatus {
                                             peer_id: Some(peer_id),
-                                            meta: meta_clone.clone(),
+                                            meta: Some(serde_json::json!({ "id": camera_id.clone() })),
                                             roles: vec![p::PeerRole::Recorder],
                                         }
                                     )).await.with_context(|| "Error sending mpsc msg")?;
+                                }
+                                p::OutgoingMessage::EndSession(p::EndSessionMessage { session_id}) => {
+                                    info!("Stopping recorder now...");
+                                    if session_id == camera_id {
+                                        websocket_sender_clone.close().await.unwrap_or_else(|err| {
+                                            error!("Error closing mpsc channel: {}", err);
+                                        });
+                                        break;
+                                    }
                                 }
                                 _ => {}
                             }

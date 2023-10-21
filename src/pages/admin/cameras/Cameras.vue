@@ -9,6 +9,12 @@
         message="Are you sure to remove this camera?"
         @ok="removeCamera(removeCameraId)"
     />
+    <va-modal
+        v-model="showStopRecorderModal"
+        title="Stop Recorder"
+        message="Are you sure to stop this recorder?"
+        @ok="stopRecorder(recorderCameraId)"
+    />
 
     <va-card>
         <va-card-content class="overflow-auto">
@@ -28,6 +34,7 @@
                             preset="plain"
                             :icon="rowData.recording?'radio_button_checked':'play_circle_outline'"
                             class="ml-3"
+                            @click=";(recorderCameraId = rowData.id), (rowData.recording?(showStopRecorderModal = true):'')"
                         />
                     </va-popover>
                     <va-popover placement="top" message="Edit">
@@ -80,7 +87,10 @@
     const addCameraModal = ref()
     const editCameraModal = ref()
     const showRemoveCameraModal = ref(false)
+    const showStopRecorderModal = ref(false)
     const removeCameraId = ''
+    const recorderCameraId = ''
+    
     const cameras = ref([] as ICamera[])
 
     function setStatus(val: string) {
@@ -111,6 +121,14 @@
     function removeCamera(id: string) {
         const msg = {
             type: 'removeCamera',
+            id,
+        }
+        wsConn?.send(JSON.stringify(msg))
+    }
+
+    function stopRecorder(id: string) {
+        const msg = {
+            type: 'stopRecorder',
             id,
         }
         wsConn?.send(JSON.stringify(msg))
