@@ -1,5 +1,6 @@
 use anyhow::{Context as _, Result, bail, anyhow};
 use async_tungstenite::tungstenite::Message;
+use clap::Parser;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
@@ -8,17 +9,33 @@ use tokio::runtime::Handle;
 use tokio::time::{sleep, timeout, Duration};
 use tracing::{debug, error, info};
 
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+/// Program arguments
+pub struct Args {
+    /// Address to listen on
+    #[clap(long, default_value = "0.0.0.0")]
+    pub host: String,
+    /// Port to listen on
+    #[clap(short, long, default_value_t = 8080)]
+    pub port: u16,
+    /// id
+    #[clap(short, long, default_value = "9989dfdc-5aa4-4a23-864a-37d0d259aff3")]
+    pub id: String,
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
+    let args = Args::parse();
+    let url = format!("ws://{}:{}/ws", args.host, args.port);
 
     let handle = Handle::current();
 
     // start gstreamer pipeline
-    // if the pipeline fails, terminate the application
-    let id = "9989dfdc-5aa4-4a23-864a-37d0d259aff3";
+    // if the pipeline fails, terminate the application;
 
-    while let Err(err) = connect(&handle, id).await {
+    while let Err(err) = connect(&handle, &url, &args.id).await {
         error!("Connect failed due to: {}", err);
         sleep(Duration::from_secs(1)).await;
     }
@@ -26,13 +43,10 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn connect(handle: &Handle, id: &str) -> Result<()> {
-    let arg = src_backend::get_args();
-    let uri = format!("ws://{}:{}/ws", arg.host, arg.port);
-
+async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
     let (ws, _) = timeout(
         Duration::from_secs(5),
-        async_tungstenite::tokio::connect_async(uri),
+        async_tungstenite::tokio::connect_async(url),
     )
     .await??;
 

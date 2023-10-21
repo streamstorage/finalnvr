@@ -5,6 +5,7 @@ use anyhow::{anyhow, bail, Context as _, Result};
 use diesel::prelude::*;
 use gst::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::process::Command;
 use tracing::{error, info};
 
 type PeerId = String;
@@ -103,6 +104,13 @@ pub struct RemoveCamera {
 #[rtype(result = "()")]
 pub struct ListCameras {
     pub addr: Recipient<Message>,
+}
+
+/// StartRecorder
+#[derive(Message)]
+#[rtype(result = "()")]
+pub struct StartRecorder {
+    pub camera: Camera,
 }
 
 /// StopRecorder
@@ -559,6 +567,13 @@ impl Server {
         Ok(())
     }
 
+    fn start_recorder(&mut self, camera_id: &String) -> Result<()> {
+        let mut cmd = Command::new("./target/debug/rtsp_camera_to_pravega");
+        let command = cmd.arg("--port").arg(self.port.to_string()).arg("--id").arg(camera_id);
+        command.spawn().with_context(||"rtsp_camera_to_pravega failed to start")?;
+        Ok(())
+    }
+
     fn stop_recorder(&mut self, camera_id: &String) -> Result<()> {
         if let Some((addr, peer_status)) = self.recorders.get(camera_id).and_then(|peer_id| self.peers.get(peer_id)) {
             if peer_status.recording() {
@@ -712,6 +727,16 @@ impl Handler<ListCameras> for Server {
     }
 }
 
+/// Handler for StartRecorder message.
+impl Handler<StartRecorder> for Server {
+    type Result = ();
+
+    fn handle(&mut self, msg: StartRecorder, _: &mut Context<Self>) {
+        self.start_recorder(&msg.camera.id).unwrap_or_else(|err| {
+            error!("Failed to start recorder: {}", err);
+        })
+    }
+}
 
 /// Handler for StopRecorder message.
 impl Handler<StopRecorder> for Server {

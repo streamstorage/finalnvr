@@ -10,10 +10,10 @@
         @ok="removeCamera(removeCameraId)"
     />
     <va-modal
-        v-model="showStopRecorderModal"
-        title="Stop Recorder"
-        message="Are you sure to stop this recorder?"
-        @ok="stopRecorder(recorderCameraId)"
+        v-model="showRecorderModal"
+        :title="ToStopRecorder?'Stop Recorder':'Start Recorder'"
+        :message="ToStopRecorder?'Are you sure to stop this recorder?':'Are you sure to record this camera?'"
+        @ok="ToStopRecorder?stopRecorder(recorderCameraId):startRecorder(recorderCameraId)"
     />
 
     <va-card>
@@ -34,7 +34,7 @@
                             preset="plain"
                             :icon="rowData.recording?'radio_button_checked':'play_circle_outline'"
                             class="ml-3"
-                            @click=";(recorderCameraId = rowData.id), (rowData.recording?(showStopRecorderModal = true):'')"
+                            @click="clickRecorder(rowData.id, rowData.recording)"
                         />
                     </va-popover>
                     <va-popover placement="top" message="Edit">
@@ -87,9 +87,10 @@
     const addCameraModal = ref()
     const editCameraModal = ref()
     const showRemoveCameraModal = ref(false)
-    const showStopRecorderModal = ref(false)
-    const removeCameraId = ''
-    const recorderCameraId = ''
+    const showRecorderModal = ref(false)
+    const ToStopRecorder = ref(false)
+    let removeCameraId = ''
+    let recorderCameraId = ''
     
     const cameras = ref([] as ICamera[])
 
@@ -126,6 +127,19 @@
         wsConn?.send(JSON.stringify(msg))
     }
 
+    function clickRecorder(id: string, isRecording: boolean) {
+        recorderCameraId = id
+        ToStopRecorder.value = isRecording
+        showRecorderModal.value = true
+    }
+
+    function startRecorder(id: string) {
+        const msg = {
+            type: 'startRecorder',
+            id,
+        }
+        wsConn?.send(JSON.stringify(msg))
+    }
     function stopRecorder(id: string) {
         const msg = {
             type: 'stopRecorder',

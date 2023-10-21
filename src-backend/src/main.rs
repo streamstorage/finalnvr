@@ -5,6 +5,7 @@ use crate::ws::connection::Connection;
 use actix::Actor;
 use actix_web::{get, web, App, Error, HttpRequest, HttpResponse, HttpServer};
 use anyhow::{Context, Result};
+use clap::Parser;
 use serde::Serialize;
 use tracing::info;
 
@@ -34,10 +35,25 @@ async fn ws_route(
     )
 }
 
+#[derive(Parser, Debug)]
+#[clap(about, version, author)]
+/// Program arguments
+pub struct Args {
+    /// Address to listen on
+    #[clap(long, default_value = "0.0.0.0")]
+    pub host: String,
+    /// Port to listen on
+    #[clap(short, long, default_value_t = 8080)]
+    pub port: u16,
+    /// db
+    #[clap(short, long, default_value = "dev.db")]
+    pub db: String,
+}
+
 #[actix_web::main]
 async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
-    let args = src_backend::get_args();
+    let args = Args::parse();
     let server = Server::new(args.port, args.db).start();
     info!("Listening on: {}:{}", args.host, args.port);
 

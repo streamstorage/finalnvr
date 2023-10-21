@@ -199,6 +199,11 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for Connection {
                                     addr: ctx.address().recipient()
                                 });
                             }
+                            p::IncomingMessage::StartRecorder(camera) => {
+                                self.addr.do_send(server::StartRecorder {
+                                    camera,
+                                });
+                            }
                             p::IncomingMessage::StopRecorder(camera) => {
                                 self.addr.do_send(server::StopRecorder {
                                     camera,
