@@ -13,9 +13,6 @@ use tracing::{debug, error, info};
 #[clap(about, version, author)]
 /// Program arguments
 pub struct Args {
-    /// Address to listen on
-    #[clap(long, default_value = "0.0.0.0")]
-    pub host: String,
     /// Port to listen on
     #[clap(short, long, default_value_t = 8080)]
     pub port: u16,
@@ -29,7 +26,7 @@ async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
     nix::unistd::setsid()?;
     let args = Args::parse();
-    let url = format!("ws://{}:{}/ws", args.host, args.port);
+    let url = format!("ws://127.0.0.1:{}/ws", args.port);
 
     let handle = Handle::current();
 

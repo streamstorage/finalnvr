@@ -45,16 +45,19 @@ pub struct Args {
     /// Port to listen on
     #[clap(short, long, default_value_t = 8080)]
     pub port: u16,
-    /// db
+    /// DB
     #[clap(short, long, default_value = "dev.db")]
     pub db: String,
+    /// Recorder path
+    #[clap(short, long, default_value = "./target/debug/rtsp_camera_to_pravega")]
+    pub recorder_path: String,
 }
 
 #[actix_web::main]
 async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
     let args = Args::parse();
-    let server = Server::new(args.port, args.db).start();
+    let server = Server::new(args.port, args.db, args.recorder_path).start();
     info!("Listening on: {}:{}", args.host, args.port);
 
     HttpServer::new(move || {

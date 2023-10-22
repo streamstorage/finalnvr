@@ -151,6 +151,7 @@ impl Session {
 pub struct Server {
     port: u16,
     db: String,
+    recorder_path: String,
     peers: HashMap<PeerId, (Recipient<Message>, p::PeerStatus)>,
     pipelines: HashMap<String, Pipeline>,
 
@@ -162,10 +163,11 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(port: u16, db: String) -> Self {
+    pub fn new(port: u16, db: String, recorder_path: String) -> Self {
         Self {
             port,
             db,
+            recorder_path,
             peers: Default::default(),
             pipelines: Default::default(),
 
@@ -579,13 +581,14 @@ impl Server {
     fn start_recorder(&mut self, camera_id: &String) -> Result<()> {
         let id = camera_id.to_owned();
         let port = self.port.to_string();
+        let recorder_path = self.recorder_path.clone();
         // Thanks to https://stackoverflow.com/questions/62978157/rust-how-to-spawn-child-process-that-continues-to-live-after-parent-receives-si
         // To spwan the detached recorder process
         let joinhandle: JoinHandle<Result<()>> = thread::Builder::new().spawn( move || {
             unsafe {
                 let result = fork().with_context(||"Fork failed")?;
                 if let ForkResult::Child = result {
-                    let mut cmd = Command::new("./target/debug/rtsp_camera_to_pravega");
+                    let mut cmd = Command::new(recorder_path);
                     let command = cmd.arg("--port").arg(port).arg("--id").arg(id);
                     command.spawn().with_context(||"Fail to spawn child process")?;
                 }
