@@ -468,7 +468,7 @@ impl Server {
             .execute(connection)
             .with_context(|| "Error executing insert query")?;
 
-        self.list_cameras_all(connection)?;
+        self.list_cameras_all_listener(connection)?;
 
         Ok(())
     }
@@ -484,7 +484,7 @@ impl Server {
             .map(|_| ())
             .with_context(|| "Error executing update query")?;
         
-        self.list_cameras_all(connection)?;
+        self.list_cameras_all_listener(connection)?;
 
         // Close the existing preview pipeline in case of caching camera url
         if let Some(pipeline) = self.pipelines.remove(&camera.id) {
@@ -506,7 +506,7 @@ impl Server {
             .map(|_| ())
             .with_context(|| "Error executing delete query")?;
         
-        self.list_cameras_all(connection)?;
+        self.list_cameras_all_listener(connection)?;
 
         if let Some(pipeline) = self.pipelines.remove(camera_id) {
             if let Err(err) = pipeline.pipeline.set_state(gst::State::Null) {
@@ -555,7 +555,7 @@ impl Server {
         Ok(())
     }
 
-    fn list_cameras_all(&mut self, connection: &mut SqliteConnection) -> Result<()> {
+    fn list_cameras_all_listener(&mut self, connection: &mut SqliteConnection) -> Result<()> {
         use crate::db::schema::cameras::dsl::cameras;
 
         let results = cameras
