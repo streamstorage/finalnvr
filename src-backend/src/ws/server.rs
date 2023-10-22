@@ -4,8 +4,10 @@ use actix::prelude::*;
 use anyhow::{anyhow, bail, Context as _, Result};
 use diesel::prelude::*;
 use gst::prelude::*;
+use nix::unistd::{fork, ForkResult};
 use std::collections::{HashMap, HashSet};
 use std::process::Command;
+use std::thread::{self, JoinHandle};
 use tracing::{error, info};
 
 type PeerId = String;
@@ -575,10 +577,33 @@ impl Server {
     }
 
     fn start_recorder(&mut self, camera_id: &String) -> Result<()> {
-        let mut cmd = Command::new("./target/debug/rtsp_camera_to_pravega");
-        let command = cmd.arg("--port").arg(self.port.to_string()).arg("--id").arg(camera_id);
-        // TODO: spawn detached process
-        command.spawn().with_context(||"rtsp_camera_to_pravega failed to start")?;
+        let id = camera_id.to_owned();
+        let port = self.port.to_string();
+        // Thanks to https://stackoverflow.com/questions/62978157/rust-how-to-spawn-child-process-that-continues-to-live-after-parent-receives-si
+        // To spwan the detached recorder process
+        let joinhandle: JoinHandle<Result<()>> = thread::Builder::new().spawn( move || {
+            unsafe {
+                let result = fork().with_context(||"Fork failed")?;
+                if let ForkResult::Child = result {
+                    let mut cmd = Command::new("./target/debug/rtsp_camera_to_pravega");
+                    let command = cmd.arg("--port").arg(port).arg("--id").arg(id);
+                    command.spawn().with_context(||"Fail to spawn child process")?;
+                }
+                Ok(())
+            }
+        }).with_context(||"Fail to create new thread")?;
+
+        match joinhandle.join() {
+            Ok(result) => {
+                if let Err(err) = result {
+                    bail!("Error when running the thread: {}", err);
+                }
+            }
+            _ => {
+                bail!("Thread failed to join");
+            }
+        }
+
         Ok(())
     }
 

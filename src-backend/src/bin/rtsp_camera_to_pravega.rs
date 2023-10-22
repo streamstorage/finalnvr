@@ -27,6 +27,7 @@ pub struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
+    nix::unistd::setsid()?;
     let args = Args::parse();
     let url = format!("ws://{}:{}/ws", args.host, args.port);
 
