@@ -1,8 +1,8 @@
 <template>
     <div class="made-by-component va-text-center pb-4">
         <span>
-            ©2021. Made by
-            <a href="https://epicmax.co" class="va-link">Epicmax</a>
+            ©2023. Made by
+            <a href="https://github.com/streamstorage" class="va-link">StreamStorage</a>
         </span>
     </div>
 </template>

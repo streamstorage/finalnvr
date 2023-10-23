@@ -9,8 +9,8 @@
                 <span>
                     {{ t('404.text') }}
                 </span>
-                <a href="mailto:hello@epicmax.co" :style="{ color: colors.primary }" class="va-link"
-                    >hello@epicmax.co</a
+                <a href="mailto:vangork@live.com" :style="{ color: colors.primary }" class="va-link"
+                    >vangork@live.com</a
                 >
             </div>
             <slot />

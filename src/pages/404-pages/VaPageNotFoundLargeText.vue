@@ -3,6 +3,7 @@
         <template #image>
             <div class="va-page-not-found-large-text__number">404</div>
         </template>
+        <va-button :to="{ name: 'dashboard' }"> Back to dashboard </va-button>
     </va-page-not-found>
 </template>
 
