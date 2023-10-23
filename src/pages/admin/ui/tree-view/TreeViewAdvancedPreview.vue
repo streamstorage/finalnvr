@@ -5,7 +5,7 @@
             <va-button @click="collapseAll">COLLAPSE ALL</va-button>
         </div>
 
-        <va-tree-view ref="treeView" v-model:expanded="expanded" :nodes="nodes">
+        <va-tree-view ref="treeView" v-model:expanded="state" :nodes="nodes">
             <template #icon-toggle="{ expanded }">
                 <div class="tree-view-advanced-preview__icon-square">
                     <va-icon color="backgroundPrimary" :name="expanded ? 'remove' : 'add'" />
@@ -82,7 +82,7 @@
             ],
         },
     ]
-    const expanded = ref([1])
+    const state = ref([1])
 
     const calcExpandableNodeIds = (nodes) => {
         const expandableNodes = []
@@ -100,10 +100,10 @@
         return expandableNodes
     }
     const expandAll = () => {
-        expanded.value = calcExpandableNodeIds(nodes)
+        state.value = calcExpandableNodeIds(nodes)
     }
     const collapseAll = () => {
-        expanded.value = []
+        state.value = []
     }
 </script>
 
