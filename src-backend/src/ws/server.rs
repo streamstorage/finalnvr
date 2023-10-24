@@ -293,6 +293,7 @@ impl Server {
             }
         } else {
             gst::init()?;
+            // TODO: zoom https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/blob/main/examples/src/bin/zoom.rs?ref_type=heads
             let pipeline_str = format!(
                 "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::address=\"ws://127.0.0.1:{}/ws\" \
                     rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
@@ -302,6 +303,27 @@ impl Server {
             let pipeline = gst::parse_launch(&pipeline_str)?;
             
             pipeline.set_state(gst::State::Playing)?;
+
+            let bus = pipeline.bus().with_context(||"Fail to get pipeline bus")?;
+            thread::Builder::new().spawn( move || {
+                for msg in bus.iter_timed(gst::ClockTime::NONE) {
+                    use gst::MessageView;
+            
+                    match msg.view() {
+                        MessageView::Eos(..) => break,
+                        MessageView::Error(err) => {
+                            error!(
+                                "Error from {:?}: {} ({:?})",
+                                err.src().map(|s| s.path_string()),
+                                err.error(),
+                                err.debug()
+                            );
+                            break;
+                        }
+                        _ => (),
+                    }
+                }
+            }).with_context(||"Fail to create new thread")?;
 
             let mut clients = HashSet::new();
             clients.insert(connection_id.to_owned());
@@ -584,6 +606,7 @@ impl Server {
         let recorder_path = self.recorder_path.clone();
         // Thanks to https://stackoverflow.com/questions/62978157/rust-how-to-spawn-child-process-that-continues-to-live-after-parent-receives-si
         // To spwan the detached recorder process
+        // TODO: spawn docker container or k8s pod
         let joinhandle: JoinHandle<Result<()>> = thread::Builder::new().spawn( move || {
             unsafe {
                 let result = fork().with_context(||"Fork failed")?;
