@@ -11,7 +11,9 @@
         "prelint": "npm run format",
         "lint": "eslint --fix \"./src/**/*.{ts,js,vue}\"",
         "format": "prettier --write .",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "backend": "cd src-backend && RUST_LOG=debug cargo watch -w src -w Cargo.toml -x 'run'",
+        "clippy": "cd src-backend && cargo clippy --fix"
     },
     "lint-staged": {
         "./src/**/*.{ts,js,vue}": [

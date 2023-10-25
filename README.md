@@ -49,8 +49,9 @@ $ cd src-backend && cargo build --release
 -   Generate dev db
 
     ```
-    cd src-backend && diesel setup --database-url dev.db
-    cd src-backend && diesel migration run --database-url dev.db
+    cd src-backend
+    diesel setup --database-url dev.db
+    diesel migration run --database-url dev.db
     ```
 
 -   Serve frontend with hot reload at 0.0.0.0:5173 by default.
@@ -62,13 +63,13 @@ $ cd src-backend && cargo build --release
 -   Serve backend with hot reload at 0.0.0.0:8080
 
     ```
-    cd src-backend && RUST_LOG=debug cargo watch -w src -w Cargo.toml -x 'run'
+    yarn backend
     ```
 
 -   Linting
     ```
     yarn lint
-    cd src-backend && cargo clippy --fix
+    yarn clippy
     ```
 
 ### License
