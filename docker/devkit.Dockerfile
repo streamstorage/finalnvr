@@ -1,4 +1,4 @@
-ARG GSTREAMER_IMAGE=ghcr.io/streamstorage/gstreamer:22.04-1.22.6-dev
+ARG GSTREAMER_IMAGE=ghcr.io/streamstorage/gstreamer:22.04-1.22.6-0.11.1-dev
 
 FROM ${GSTREAMER_IMAGE}
 
