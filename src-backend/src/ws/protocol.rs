@@ -16,6 +16,7 @@ pub struct Peer {
 /// Messages sent from the server to peers
 pub enum OutgoingMessage {
     /// Welcoming message, sets the Peer ID linked to a new connection
+    #[serde(rename_all = "camelCase")]
     Welcome { peer_id: String },
     /// Notifies listeners that a peer status has changed
     PeerStatusChanged(PeerStatus),
@@ -31,8 +32,10 @@ pub enum OutgoingMessage {
     /// Messages directly forwarded from one peer to another
     Peer(PeerMessage),
     /// Provides the current list of consumer peers
+    #[serde(rename_all = "camelCase")]
     List { producers: Vec<Peer> },
     /// Notifies that an error occurred with the peer's current session
+    #[serde(rename_all = "camelCase")]
     Error { details: String },
     ListCameras { cameras: Vec<Camera> },
 }

@@ -7,7 +7,7 @@ use futures::stream::FuturesUnordered;
 use src_backend::ws::protocol as p;
 use tokio::runtime::Handle;
 use tokio::time::{sleep, timeout, Duration};
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 
 #[derive(Parser, Debug)]
 #[clap(about, version, author)]
@@ -93,7 +93,9 @@ async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
                                         break;
                                     }
                                 }
-                                _ => {}
+                                _ => {
+                                    warn!("Got unknown msg: {:?}", msg);
+                                }
                             }
                         }
                     }

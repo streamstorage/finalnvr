@@ -9,7 +9,7 @@
 -   Build devkit
 
 ```
-docker build -t finalnvr/devkit --build-arg HTTP_PROXY="http://172.17.0.1:19000" --build-arg HTTPS_PROXY="http://172.17.0.1:19000"  -f devkit.Dockerfile .
+docker build -t finalnvr/devkit --build-arg HTTP_PROXY="http://172.17.0.1:19000" --build-arg HTTPS_PROXY="http://172.17.0.1:19000" -f devkit.Dockerfile .
 ```
 
 -   Develop FinalNVR in devkit container

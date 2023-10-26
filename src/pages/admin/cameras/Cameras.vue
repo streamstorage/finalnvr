@@ -219,7 +219,7 @@
         }
 
         if (msg.type == 'welcome') {
-            console.info(`Got welcomed with ID ${msg.peer_id}`)
+            console.info(`Got welcomed with ID ${msg.peerId}`)
         } else if (msg.type == 'list') {
             // for (let i = 0; i < msg.producers.length; i++) {
             //     if (msg.producers[i].meta.id === previewId && previewId !== undefined) {

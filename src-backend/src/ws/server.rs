@@ -295,8 +295,8 @@ impl Server {
             gst::init()?;
             // TODO: zoom https://gitlab.freedesktop.org/gstreamer/gstreamer-rs/-/blob/main/examples/src/bin/zoom.rs?ref_type=heads
             let pipeline_str = format!(
-                "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::address=\"ws://127.0.0.1:{}/ws\" \
-                    rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! avdec_h264 ! ws.",
+                "webrtcsink name=ws meta=\"meta,id={},init={}\" signaller::uri=\"ws://127.0.0.1:{}/ws\" \
+                    rtspsrc location={} drop-on-latency=true latency=50 ! rtph264depay ! h264parse ! video/x-h264,alignment=au ! ws.",
                     //audiotestsrc ! ws.",
                 camera_id, connection_id, self.port, camera_url
             );
