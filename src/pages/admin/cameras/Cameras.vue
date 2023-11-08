@@ -13,7 +13,7 @@
         v-model="showRecorderModal"
         :title="ToStopRecorder ? 'Stop Recorder' : 'Start Recorder'"
         :message="ToStopRecorder ? 'Are you sure to stop this recorder?' : 'Are you sure to record this camera?'"
-        @ok="ToStopRecorder ? stopRecorder(recorderCameraId) : startRecorder(recorderCameraId)"
+        @ok="ToStopRecorder ? stopRecorder(recorderCamera) : startRecorder(recorderCamera)"
     />
 
     <va-card>
@@ -34,7 +34,7 @@
                             preset="plain"
                             :icon="rowData.recording ? 'radio_button_checked' : 'play_circle_outline'"
                             class="ml-3"
-                            @click="clickRecorder(rowData.id, rowData.recording)"
+                            @click="clickRecorder(rowData, rowData.recording)"
                         />
                     </va-popover>
                     <va-popover placement="top" message="Edit">
@@ -73,7 +73,7 @@
     import { ICamera } from './Camera'
     import CameraModal from './CameraModal.vue'
     import { Webrtc } from './Webrtc'
-    import { onMounted, ref } from 'vue'
+    import { onMounted, onUnmounted, ref } from 'vue'
 
     const addCameraColumns = ref([
         { key: 'id' },
@@ -90,7 +90,7 @@
     const showRecorderModal = ref(false)
     const ToStopRecorder = ref(false)
     let removeCameraId = ''
-    let recorderCameraId = ''
+    let recorderCamera: ICamera
 
     const cameras = ref([] as ICamera[])
 
@@ -127,23 +127,24 @@
         wsConn?.send(JSON.stringify(msg))
     }
 
-    function clickRecorder(id: string, isRecording: boolean) {
-        recorderCameraId = id
+    function clickRecorder(camera: ICamera, isRecording: boolean) {
+        recorderCamera = camera
         ToStopRecorder.value = isRecording
         showRecorderModal.value = true
     }
 
-    function startRecorder(id: string) {
+    function startRecorder(camera: ICamera) {
         const msg = {
             type: 'startRecorder',
-            id,
+            id: camera.id,
+            url: camera.url,
         }
         wsConn?.send(JSON.stringify(msg))
     }
-    function stopRecorder(id: string) {
+    function stopRecorder(camera: ICamera) {
         const msg = {
             type: 'stopRecorder',
-            id,
+            id: camera.id,
         }
         wsConn?.send(JSON.stringify(msg))
     }
@@ -259,10 +260,13 @@
         }
     }
 
-    function clearConnection() {
+    function clearConnection(withClose: boolean = false) {
         wsConn?.removeEventListener('error', onServerError)
         wsConn?.removeEventListener('message', onServerMessage)
         wsConn?.removeEventListener('close', onServerClose)
+        if (withClose) {
+            wsConn?.close()
+        }
         wsConn = undefined
     }
 
@@ -289,6 +293,12 @@
 
     onMounted(() => {
         connect()
+    })
+
+    onUnmounted(() => {
+        clearConnection(true)
+        clearPeers()
+        console.log('Unmounted')
     })
 </script>
 

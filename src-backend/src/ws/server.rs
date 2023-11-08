@@ -600,9 +600,10 @@ impl Server {
         Ok(())
     }
 
-    fn start_recorder(&mut self, camera_id: &String) -> Result<()> {
+    fn start_recorder(&mut self, camera_id: &String, camera_url: &String) -> Result<()> {
         let id = camera_id.to_owned();
         let port = self.port.to_string();
+        let url = camera_url.to_owned();
         let recorder_path = self.recorder_path.clone();
         // Thanks to https://stackoverflow.com/questions/62978157/rust-how-to-spawn-child-process-that-continues-to-live-after-parent-receives-si
         // To spwan the detached recorder process
@@ -612,7 +613,7 @@ impl Server {
                 let result = fork().with_context(||"Fork failed")?;
                 if let ForkResult::Child = result {
                     let mut cmd = Command::new(recorder_path);
-                    let command = cmd.arg("--port").arg(port).arg("--id").arg(id);
+                    let command = cmd.arg("--port").arg(port).arg("--id").arg(id).arg("--camera-url").arg(url);
                     command.spawn().with_context(||"Fail to spawn child process")?;
                 }
                 Ok(())
@@ -791,7 +792,7 @@ impl Handler<StartRecorder> for Server {
     type Result = ();
 
     fn handle(&mut self, msg: StartRecorder, _: &mut Context<Self>) {
-        self.start_recorder(&msg.camera.id).unwrap_or_else(|err| {
+        self.start_recorder(&msg.camera.id, &msg.camera.url).unwrap_or_else(|err| {
             error!("Failed to start recorder: {}", err);
         })
     }

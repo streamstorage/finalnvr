@@ -4,6 +4,8 @@ use clap::Parser;
 use futures::channel::mpsc;
 use futures::prelude::*;
 use futures::stream::FuturesUnordered;
+use glib::MainLoop;
+use gst::prelude::*;
 use src_backend::ws::protocol as p;
 use tokio::runtime::Handle;
 use tokio::time::{sleep, timeout, Duration};
@@ -19,29 +21,88 @@ pub struct Args {
     /// id
     #[clap(short, long, default_value = "9989dfdc-5aa4-4a23-864a-37d0d259aff3")]
     pub id: String,
+    #[clap(short, long)]
+    pub camera_url: String,
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
     src_backend::initialize_logging()?;
+    // fork
     nix::unistd::setsid()?;
+
     let args = Args::parse();
     let url = format!("ws://127.0.0.1:{}/ws", args.port);
 
     let handle = Handle::current();
 
-    // start gstreamer pipeline
-    // if the pipeline fails, terminate the application;
+    let controller = "tcp://127.0.0.1:9090";
+    let stream = format!("{}/{}", "examples", &args.id);
+    let buffer_size = 100 * 1024 *1024;
 
-    while let Err(err) = connect(&handle, &url, &args.id).await {
-        error!("Connect failed due to: {}", err);
-        sleep(Duration::from_secs(1)).await;
-    }
+    // start gstreamer pipeline
+    // if the pipeline fails, terminate the application
+    gst::init()?;
+    let main_loop = MainLoop::new(None, false);
+
+    let pipeline_str = format!(
+        "rtspsrc name=rtspsrc location={} drop-on-latency=true latency=50 \
+            ! rtph264depay ! h264parse ! video/x-h264,alignment=au \
+            ! timestampcvt input-timestamp-mode=start-at-current-time \
+            ! queue max-size-buffers=0 max-size-time=0 max-size-bytes={} \
+            ! pravegasink allow-create-scope=true controller={} stream={} sync=false buffer-size={} timestamp-mode=tai",
+        args.camera_url, buffer_size, controller, stream, buffer_size
+    );
+    let pipeline = gst::parse_launch(&pipeline_str)?;
+    let bus = pipeline.bus().with_context(||"Fail to get pipeline bus")?;
+    info!("pipeline: {}", pipeline_str);
+
+    let main_loop_clone = main_loop.clone();
+    let _bus_watch = bus
+        .add_watch(move |_, msg| {
+            use gst::MessageView;
+
+            let main_loop: &MainLoop = &main_loop_clone;
+            match msg.view() {
+                MessageView::Eos(..) => main_loop.quit(),
+                MessageView::Error(err) => {
+                    println!(
+                        "Error from {:?}: {} ({:?})",
+                        err.src().map(|s| s.path_string()),
+                        err.error(),
+                        err.debug()
+                    );
+                    main_loop.quit();
+                }
+                _ => (),
+            };
+
+            glib::ControlFlow::Continue
+        })?;
+
+    let handle_clone = handle.clone();
+    let main_loop_clone = main_loop.clone();
+    let live_check_task = handle.spawn(async move {
+        while let Err(err) = connect(&handle_clone, &url, &args.id, main_loop_clone.clone()).await {
+            error!("Connect failed due to: {}", err);
+            sleep(Duration::from_secs(1)).await;
+        }
+    });
+
+    info!("live check task spawned");
+    let main_loop_clone = main_loop.clone();
+    handle.spawn_blocking(move || {
+        pipeline.set_state(gst::State::Playing).unwrap();
+        info!("pipeline is playing");
+        main_loop_clone.run();
+        live_check_task.abort();
+        pipeline.set_state(gst::State::Null).unwrap();
+    }).await?;
 
     Ok(())
 }
 
-async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
+async fn connect(handle: &Handle, url: &String, id: &String, main_loop: MainLoop) -> Result<()> {
     let (ws, _) = timeout(
         Duration::from_secs(5),
         async_tungstenite::tokio::connect_async(url),
@@ -50,11 +111,11 @@ async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
 
     info!("Server connected");
     let (mut ws_sink, mut ws_stream) = ws.split();
-  
+    
     // 1000 is completely arbitrary, we simply don't want infinite piling
     // up of messages as with unbounded
     let (mut websocket_sender, mut websocket_receiver) = mpsc::channel::<p::IncomingMessage>(1000);
-    
+
     let send_task_handle = handle.spawn(async move {
             while let Some(msg) = websocket_receiver.next().await {
                 ws_sink
@@ -66,7 +127,6 @@ async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
         });
 
     let mut websocket_sender_clone = websocket_sender.clone();
-
     let camera_id = id.to_owned();
     let receive_task_handle = handle.spawn(async move {
             while let Some(msg) = tokio_stream::StreamExt::next(&mut ws_stream).await {
@@ -90,6 +150,7 @@ async fn connect(handle: &Handle, url: &String, id: &String) -> Result<()> {
                                         websocket_sender_clone.close().await.unwrap_or_else(|err| {
                                             error!("Error closing mpsc channel: {}", err);
                                         });
+                                        main_loop.quit();
                                         break;
                                     }
                                 }
