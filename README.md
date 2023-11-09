@@ -42,6 +42,7 @@ $ cd src-backend && cargo build --release
     ```
     cargo install cargo-watch
     rustup component add clippy
+    rustup component add rustfmt
     apt-get install libsqlite3-dev
     cargo install diesel_cli --no-default-features --features sqlite
     ```

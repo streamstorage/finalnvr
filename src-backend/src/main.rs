@@ -1,27 +1,14 @@
 mod db;
+mod http;
 mod ws;
 use crate::ws::server::Server;
 use crate::ws::connection::Connection;
 use actix::Actor;
-use actix_web::{get, web, App, Error, HttpRequest, HttpResponse, HttpServer};
+use actix_web::{web, App, Error, HttpRequest, HttpResponse, HttpServer, middleware};
 use anyhow::{Context, Result};
 use clap::Parser;
-use serde::Serialize;
 use tracing::info;
 
-#[derive(Debug, Serialize)]
-struct SimpleJson {
-    code: i32,
-    msg: String,
-}
-
-#[get("/api")]
-async fn index() -> HttpResponse {
-    HttpResponse::Ok().json(SimpleJson{
-        code: 200,
-        msg: "Ok".to_string()
-    })
-}
 
 async fn ws_route(
     req: HttpRequest,
@@ -63,7 +50,10 @@ async fn main() -> Result<()> {
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(server.clone()))
-            .service(index)
+            // enable logger
+            // https://docs.rs/actix-web/latest/actix_web/middleware/struct.Logger.html
+            .wrap(middleware::Logger::default())
+            .configure(http::config::config_routing)
             .route("/ws", web::get().to(ws_route))
     })
     .bind((args.host.clone(), args.port))

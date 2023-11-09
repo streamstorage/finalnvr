@@ -179,8 +179,7 @@
         hide()
     }
 
-    let wsPort = '8080'
-    let wsUrl = `ws://${window.location.hostname}:${wsPort}/ws`
+    let wsUrl = `ws://${window.location.hostname}:${window.location.port}/ws`
     let wsConn: WebSocket | undefined = undefined
 
     function connect() {
@@ -298,7 +297,6 @@
     onUnmounted(() => {
         clearConnection(true)
         clearPeers()
-        console.log('Unmounted')
     })
 </script>
 

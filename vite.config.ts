@@ -12,4 +12,13 @@ export default defineConfig({
             include: resolve(dirname(fileURLToPath(import.meta.url)), './src/i18n/locales/**'),
         }),
     ],
+    server: {
+        proxy: {
+            '/v1': 'http://localhost:8080',
+            '/ws': {
+                target: 'ws://localhost:8080',
+                ws: true,
+              },
+        },
+    },
 })

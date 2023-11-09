@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y libsqlite3-dev wget
 
 RUN cargo install cargo-watch && \
     rustup component add clippy && \
+    rustup component add rustfmt && \
     cargo install diesel_cli --no-default-features --features sqlite
 
 RUN wget -P /tmp https://nodejs.org/download/release/v16.20.2/node-v16.20.2-linux-x64.tar.gz && \

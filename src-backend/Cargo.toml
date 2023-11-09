@@ -22,6 +22,9 @@ futures = "0.3"
 glib = { git = "https://github.com/gtk-rs/gtk-rs-core" }
 gst = { package = "gstreamer", git = "https://gitlab.freedesktop.org/gstreamer/gstreamer-rs",  features = ["v1_18"] }
 nix = { version = "0.27.1", features = ["process"] }
+pravega-client = { git = "https://github.com/pravega/pravega-client-rust", rev = "c0f18135798cf4f54512e13066d94aed1a71dfb8" }
+pravega-client-config = { git = "https://github.com/pravega/pravega-client-rust", package = "pravega-client-config", rev = "c0f18135798cf4f54512e13066d94aed1a71dfb8" }
+pravega-client-shared = { git = "https://github.com/pravega/pravega-client-rust", package = "pravega-client-shared", rev = "c0f18135798cf4f54512e13066d94aed1a71dfb8" }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["fs", "macros", "rt", "rt-multi-thread", "time"] }
